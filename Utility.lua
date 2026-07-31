@@ -7,22 +7,28 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
-local StatsService = game:GetService("Stats")
 local MarketplaceService = game:GetService("MarketplaceService")
 local LocalizationService = game:GetService("LocalizationService")
 
--- Fallback for VirtualUser (sometimes restricted)
+-- Safe Services
+local StatsService
+pcall(function() StatsService = game:GetService("Stats") end)
+
 local VirtualUser
 pcall(function() VirtualUser = game:GetService("VirtualUser") end)
 if not VirtualUser then
     VirtualUser = { Button2Down = function() end, Button2Up = function() end }
 end
 
--- Safe Wait & Delay Functions (menggantikan task/wait/delay yang nil)
+-- Fallbacks for missing globals
+local GetTime = os.clock or tick or function() return 0 end
+local GetDate = os.date or function(f) return "00:00" end
+
+-- Safe Wait & Delay Functions
 local function SafeWait(t)
     t = t or 0
-    local start = os.clock()
-    while os.clock() - start < t do
+    local start = GetTime()
+    while GetTime() - start < t do
         RunService.Heartbeat:Wait()
     end
 end
@@ -49,7 +55,8 @@ local JumpConnection
 -- Saving original lighting states safely
 local OriginalFB = {Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime, GlobalShadows = Lighting.GlobalShadows}
 pcall(function() OriginalFB.ExposureCompensation = Lighting.ExposureCompensation end)
-local OriginalFog = {FogEnd = Lighting.FogEnd, FogStart = Lighting.FogStart}
+local OriginalFog = {FogEnd = Lighting.FogEnd}
+pcall(function() OriginalFog.FogStart = Lighting.FogStart end)
 
 local WalkSpeed = 16
 local JumpPower = 50
@@ -71,8 +78,17 @@ pcall(function()
     end
 end)
 
+-- Bulletproof CoreGui fetching
+local SafeCoreGui
+pcall(function() SafeCoreGui = game:GetService("CoreGui") end)
+if not SafeCoreGui then
+    SafeCoreGui = LP:WaitForChild("PlayerGui")
+end
+
 -- Cleanup Previous Instances
-if game.CoreGui:FindFirstChild("MametUtility") then game.CoreGui.MametUtility:Destroy() end
+pcall(function()
+    if SafeCoreGui:FindFirstChild("MametUtility") then SafeCoreGui.MametUtility:Destroy() end
+end)
 if Lighting:FindFirstChild("MametUIBlur") then Lighting.MametUIBlur:Destroy() end
 
 ------------------------------------------------
@@ -119,7 +135,7 @@ local DynamicLabels = {}
 
 local function RegisterDynamicLang(obj, textID, textEN) table.insert(DynamicLabels, {Obj = obj, ID = textID, EN = textEN}); obj.Text = CurrentLanguage == "ID" and textID or textEN end
 local UIBlur = Instance.new("BlurEffect", Lighting); UIBlur.Name = "MametUIBlur"; UIBlur.Size = 0 
-local Gui = Instance.new("ScreenGui", game.CoreGui); Gui.Name = "MametUtility"
+local Gui = Instance.new("ScreenGui"); Gui.Name = "MametUtility"; Gui.Parent = SafeCoreGui
 
 local function Humanoid() local c = LP.Character; return c and c:FindFirstChildOfClass("Humanoid") end
 local function HRP() local c = LP.Character; return c and c:FindFirstChild("HumanoidRootPart") end
@@ -167,7 +183,7 @@ local TooltipText = Instance.new("TextLabel", TooltipUI); TooltipText.Size = UDi
 local lastTooltipUpdate = 0
 UIS.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement and TooltipUI.Visible then
-        local now = os.clock()
+        local now = GetTime()
         if now - lastTooltipUpdate > 0.05 then
             lastTooltipUpdate = now
             local targetX = input.Position.X + 15; local targetY = input.Position.Y + 15
@@ -192,15 +208,17 @@ local TopBlocker = Instance.new("Frame", Top); TopBlocker.Size = UDim2.new(1, 0,
 
 local HeaderText = Instance.new("TextLabel", Top); HeaderText.Size = UDim2.new(1, -110, 1, 0); HeaderText.Position = UDim2.new(0, 10, 0, 0); HeaderText.BackgroundTransparency = 1; HeaderText.TextColor3 = Theme.Text; HeaderText.Font = Enum.Font.GothamBold; HeaderText.TextSize = 10; HeaderText.TextXAlignment = Enum.TextXAlignment.Left; HeaderText.RichText = true
 
-local fps, startTime, frames, lastPingHex, lastPingValue = 0, os.clock(), 0, "#2ECC71", 0
+local fps, startTime, frames, lastPingHex, lastPingValue = 0, GetTime(), 0, "#2ECC71", 0
 StatsConnection = RunService.RenderStepped:Connect(function()
-    frames = frames + 1; local now = os.clock()
+    frames = frames + 1; local now = GetTime()
     if now - startTime >= 1 then 
         fps = frames; frames = 0; startTime = now 
-        pcall(function() lastPingValue = tonumber(StatsService.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 0 end)
+        if StatsService then
+            pcall(function() lastPingValue = tonumber(StatsService.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 0 end)
+        end
         lastPingHex = (lastPingValue >= 250) and "#E74C3C" or ((lastPingValue >= 150) and "#E67E22" or ((lastPingValue >= 80) and "#F1C40F" or "#2ECC71"))
     end
-    HeaderText.Text = "MAMET PRO │ " .. os.date("%H:%M") .. " │ " .. fps .. " FPS │ <font color='" .. lastPingHex .. "'>" .. lastPingValue .. " ms</font>"
+    HeaderText.Text = "MAMET PRO │ " .. GetDate("%H:%M") .. " │ " .. fps .. " FPS │ <font color='" .. lastPingHex .. "'>" .. lastPingValue .. " ms</font>"
 end)
 
 -- Tab Panel Setup
@@ -378,7 +396,7 @@ CreateRow(SecAcc, "Display Name").Text = LP.DisplayName
 CreateRow(SecAcc, "Username").Text = "@" .. LP.Name
 CreateRow(SecAcc, "User ID").Text = tostring(LP.UserId)
 CreateRow(SecAcc, "Account Age").Text = LP.AccountAge .. " Days"
-CreateRow(SecAcc, "Join Date").Text = os.date("%Y-%m-%d", os.time() - (LP.AccountAge * 86400))
+CreateRow(SecAcc, "Join Date").Text = GetDate("%Y-%m-%d", os.time() - (LP.AccountAge * 86400))
 local ValPremium = CreateRow(SecAcc, "Premium"); ValPremium.Text = LP.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"; ValPremium.TextColor3 = LP.MembershipType == Enum.MembershipType.Premium and Color3.fromHex("#F1C40F") or Color3.new(1, 1, 1)
 
 local ValBio, ValFriends, ValActiveFriends = CreateRow(SecAcc, "Bio"), CreateRow(SecAcc, "Friends"), CreateRow(SecAcc, "Active Friends")
@@ -399,7 +417,9 @@ coroutine.wrap(function() local s, info = pcall(function() return MarketplaceSer
 local SecExtra = CreateProfileAccordion("Extra Information", 4, 120)
 CreateRow(SecExtra, "Device").Text = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Mobile" or (UIS.GamepadEnabled and "Console" or "PC")
 CreateRow(SecExtra, "Locale").Text = LocalizationService.SystemLocaleId
-CreateRow(SecExtra, "Roblox Version").Text = version()
+local vStr = "Unknown"
+pcall(function() vStr = RunService:GetClientVersion() end)
+CreateRow(SecExtra, "Roblox Version").Text = vStr
 local ValStatus = CreateRow(SecExtra, "Status"); ValStatus.Text = "Connected"; ValStatus.TextColor3 = Color3.fromHex("#2ECC71")
 
 -- // 2. MOVEMENT TAB
