@@ -5,27 +5,12 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local StatsService = game:GetService("Stats")
 local MarketplaceService = game:GetService("MarketplaceService")
 local LocalizationService = game:GetService("LocalizationService")
-local VirtualUser = game:GetService("VirtualUser")
-
--- Fallback for missing globals
-local task = task or { wait = wait, spawn = function(f, ...) coroutine.wrap(f)(...) end, delay = delay }
-local GetTime = os.clock or tick
-local GetDate = os.date
-
--- Safe Parent for UI
-local ParentGui = game:GetService("CoreGui")
-pcall(function() if gethui then ParentGui = gethui() end end)
-
--- Safe Color3.fromHex Replacement
-local function Hex(hex)
-    hex = hex:gsub("#","")
-    return Color3.fromRGB(tonumber("0x"..hex:sub(1,2)), tonumber("0x"..hex:sub(3,4)), tonumber("0x"..hex:sub(5,6)))
-end
 
 local LP = Players.LocalPlayer
 local Waypoints = {}
@@ -42,8 +27,7 @@ local JumpConnection
 -- Saving original lighting states safely
 local OriginalFB = {Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime, GlobalShadows = Lighting.GlobalShadows}
 pcall(function() OriginalFB.ExposureCompensation = Lighting.ExposureCompensation end)
-local OriginalFog = {FogEnd = Lighting.FogEnd}
-pcall(function() OriginalFog.FogStart = Lighting.FogStart end)
+local OriginalFog = {FogEnd = Lighting.FogEnd, FogStart = Lighting.FogStart}
 
 local WalkSpeed = 16
 local JumpPower = 50
@@ -54,7 +38,7 @@ local Binding = false
 local ToggleStates = {
     InfJump = false, Noclip = false, Fly = false,
     InstantPrompt = false, MaxZoom = false, AntiAFK = false, PotatoMode = false, ESP = false,
-    SmartInspector = false, Fullbright = false, Nofog = false, PartESP = false, GotoPart = false
+    SmartInspector = false, Fullbright = false, Nofog = false, ESPPart = false
 }
 
 -- Config Folder Setup
@@ -66,9 +50,7 @@ pcall(function()
 end)
 
 -- Cleanup Previous Instances
-pcall(function()
-    if ParentGui:FindFirstChild("MametUtility") then ParentGui.MametUtility:Destroy() end
-end)
+if game.CoreGui:FindFirstChild("MametUtility") then game.CoreGui.MametUtility:Destroy() end
 if Lighting:FindFirstChild("MametUIBlur") then Lighting.MametUIBlur:Destroy() end
 
 ------------------------------------------------
@@ -104,8 +86,8 @@ end)
 -- THEME & LANGUAGE SYSTEM
 ------------------------------------------------
 local Themes = {
-    Light = { Background = Hex("#9B5DE5"), BackgroundTop = Hex("#7B45B7"), BackgroundTab = Hex("#8948D4"), ButtonDefault = Hex("#00BBF9"), ButtonOn = Hex("#F15BB5"), ButtonOff = Hex("#00BBF9"), Text = Hex("#FEE440") },
-    Dark = { Background = Hex("#18181B"), BackgroundTop = Hex("#09090B"), BackgroundTab = Hex("#27272A"), ButtonDefault = Hex("#3F3F46"), ButtonOn = Hex("#3730A3"), ButtonOff = Hex("#3F3F46"), Text = Hex("#38BDF8") }
+    Light = { Background = Color3.fromHex("#9B5DE5"), BackgroundTop = Color3.fromHex("#7B45B7"), BackgroundTab = Color3.fromHex("#8948D4"), ButtonDefault = Color3.fromHex("#00BBF9"), ButtonOn = Color3.fromHex("#F15BB5"), ButtonOff = Color3.fromHex("#00BBF9"), Text = Color3.fromHex("#FEE440") },
+    Dark = { Background = Color3.fromHex("#18181B"), BackgroundTop = Color3.fromHex("#09090B"), BackgroundTab = Color3.fromHex("#27272A"), ButtonDefault = Color3.fromHex("#3F3F46"), ButtonOn = Color3.fromHex("#3730A3"), ButtonOff = Color3.fromHex("#3F3F46"), Text = Color3.fromHex("#38BDF8") }
 }
 
 local Theme = Themes.Dark
@@ -115,7 +97,7 @@ local DynamicLabels = {}
 
 local function RegisterDynamicLang(obj, textID, textEN) table.insert(DynamicLabels, {Obj = obj, ID = textID, EN = textEN}); obj.Text = CurrentLanguage == "ID" and textID or textEN end
 local UIBlur = Instance.new("BlurEffect", Lighting); UIBlur.Name = "MametUIBlur"; UIBlur.Size = 0 
-local Gui = Instance.new("ScreenGui"); Gui.Name = "MametUtility"; Gui.Parent = ParentGui
+local Gui = Instance.new("ScreenGui", game.CoreGui); Gui.Name = "MametUtility"
 
 local function Humanoid() local c = LP.Character; return c and c:FindFirstChildOfClass("Humanoid") end
 local function HRP() local c = LP.Character; return c and c:FindFirstChild("HumanoidRootPart") end
@@ -148,7 +130,7 @@ local function Notify(title, message, duration)
     local TxtMsg = Instance.new("TextLabel", Notif); TxtMsg.Size = UDim2.new(1, -10, 0, 30); TxtMsg.Position = UDim2.new(0, 10, 0, 22); TxtMsg.Text = message; TxtMsg.TextColor3 = Color3.new(1,1,1); TxtMsg.Font = Enum.Font.Gotham; TxtMsg.TextSize = 10; TxtMsg.BackgroundTransparency = 1; TxtMsg.TextXAlignment = Enum.TextXAlignment.Left; TxtMsg.TextWrapped = true
     table.insert(ActiveNotifications, Notif)
     TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(1, -220, 1, -80)}):Play()
-    task.delay(duration, function()
+    delay(duration, function()
         local out = TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1, 20, 1, Notif.Position.Y.Offset)})
         out:Play(); out.Completed:Wait()
         for i, v in ipairs(ActiveNotifications) do if v == Notif then table.remove(ActiveNotifications, i) break end end
@@ -163,7 +145,7 @@ local TooltipText = Instance.new("TextLabel", TooltipUI); TooltipText.Size = UDi
 local lastTooltipUpdate = 0
 UIS.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement and TooltipUI.Visible then
-        local now = GetTime()
+        local now = os.clock()
         if now - lastTooltipUpdate > 0.05 then
             lastTooltipUpdate = now
             local targetX = input.Position.X + 15; local targetY = input.Position.Y + 15
@@ -188,15 +170,15 @@ local TopBlocker = Instance.new("Frame", Top); TopBlocker.Size = UDim2.new(1, 0,
 
 local HeaderText = Instance.new("TextLabel", Top); HeaderText.Size = UDim2.new(1, -110, 1, 0); HeaderText.Position = UDim2.new(0, 10, 0, 0); HeaderText.BackgroundTransparency = 1; HeaderText.TextColor3 = Theme.Text; HeaderText.Font = Enum.Font.GothamBold; HeaderText.TextSize = 10; HeaderText.TextXAlignment = Enum.TextXAlignment.Left; HeaderText.RichText = true
 
-local fps, startTime, frames, lastPingHex, lastPingValue = 0, GetTime(), 0, "#2ECC71", 0
+local fps, startTime, frames, lastPingHex, lastPingValue = 0, os.clock(), 0, "#2ECC71", 0
 StatsConnection = RunService.RenderStepped:Connect(function()
-    frames = frames + 1; local now = GetTime()
+    frames = frames + 1; local now = os.clock()
     if now - startTime >= 1 then 
         fps = frames; frames = 0; startTime = now 
         pcall(function() lastPingValue = tonumber(StatsService.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 0 end)
         lastPingHex = (lastPingValue >= 250) and "#E74C3C" or ((lastPingValue >= 150) and "#E67E22" or ((lastPingValue >= 80) and "#F1C40F" or "#2ECC71"))
     end
-    HeaderText.Text = "MAMET PRO │ " .. GetDate("%H:%M") .. " │ " .. fps .. " FPS │ <font color='" .. lastPingHex .. "'>" .. lastPingValue .. " ms</font>"
+    HeaderText.Text = "MAMET PRO │ " .. os.date("%H:%M") .. " │ " .. fps .. " FPS │ <font color='" .. lastPingHex .. "'>" .. lastPingValue .. " ms</font>"
 end)
 
 -- Tab Panel Setup
@@ -231,7 +213,7 @@ local function ToggleUI()
     UI_Open = not UI_Open; if UI_Open then Frame.Visible = true end
     TweenService:Create(Frame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and UDim2.new(0, 360, 0, 260) or UDim2.new(0, 360, 0, 0)}):Play()
     TweenService:Create(UIBlur, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and 20 or 0}):Play()
-    if not UI_Open then task.delay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
+    if not UI_Open then delay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
 end
 
 -- Header Buttons
@@ -287,7 +269,7 @@ local function CreateSlider(parent, name, min, max, default, color, layoutOrder,
     local Holder = Instance.new("Frame", parent); Holder.Size = UDim2.new(0, 220, 0, 42); Holder.BackgroundTransparency = 1; Holder.LayoutOrder = layoutOrder
     local Label = Instance.new("TextLabel", Holder); Label.Size = UDim2.new(1, 0, 0, 15); Label.TextColor3 = Theme.Text; Label.TextSize = 11; Label.Text = name .. " : " .. default; Label.Font = Enum.Font.GothamBold; Label.BackgroundTransparency = 1
     local Bar = Instance.new("TextButton", Holder); Bar.Text = ""; Bar.AutoButtonColor = false; Bar.Position = UDim2.new(0, 0, 0, 20); Bar.Size = UDim2.new(1, 0, 0, 12); Bar.BackgroundTransparency = 1
-    local VBar = Instance.new("Frame", Bar); VBar.Size = UDim2.new(1, 0, 0, 4); VBar.Position = UDim2.new(0, 0, 0.5, -2); VBar.BackgroundColor3 = Hex("#6237A0"); Corner(VBar, 999)
+    local VBar = Instance.new("Frame", Bar); VBar.Size = UDim2.new(1, 0, 0, 4); VBar.Position = UDim2.new(0, 0, 0.5, -2); VBar.BackgroundColor3 = Color3.fromHex("#6237A0"); Corner(VBar, 999)
     local Fill = Instance.new("Frame", VBar); Fill.BackgroundColor3 = color; Corner(Fill, 999)
     local Handle = Instance.new("Frame", VBar); Handle.Size = UDim2.new(0, 18, 0, 18); Handle.AnchorPoint = Vector2.new(0.5, 0.5); Handle.Position = UDim2.new(0, 0, 0.5, 0); Handle.BackgroundColor3 = Theme.Text; Corner(Handle, 999)
 
@@ -301,7 +283,7 @@ local function CreateSlider(parent, name, min, max, default, color, layoutOrder,
 
     local startX
     Bar.InputBegan:Connect(function(input) if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and ActiveSlider == nil then startX = input.Position.X end end)
-    Bar.InputEnded:Connect(function(input) if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and startX then if math.abs(input.Position.X - startX) < 5 and ActiveSlider == nil then Update(input.Position.X) end; startX = nil end end)
+    Bar.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then if startX then if math.abs(input.Position.X - startX) < 5 and ActiveSlider == nil then Update(input.Position.X) end; startX = nil end end end)
     local function SetVisual(val) local p = math.clamp((val - min) / (max - min), 0, 1); Fill.Size = UDim2.new(p, 0, 1, 0); Handle.Position = UDim2.new(p, 0, 0.5, 0); Label.Text = name .. " : " .. val end
     SetVisual(default); return SetVisual
 end
@@ -367,22 +349,22 @@ end
 
 local AvatarFrame = Instance.new("Frame", TabProfile); AvatarFrame.Size = UDim2.new(0, 64, 0, 64); AvatarFrame.BackgroundColor3 = Theme.BackgroundTop; AvatarFrame.LayoutOrder = 1; Corner(AvatarFrame, 32)
 local AvatarImg = Instance.new("ImageLabel", AvatarFrame); AvatarImg.Size = UDim2.new(1, 0, 1, 0); AvatarImg.BackgroundTransparency = 1; Corner(AvatarImg, 32)
-task.spawn(function() local s, img = pcall(function() return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end); if s then AvatarImg.Image = img end end)
+coroutine.wrap(function() local s, img = pcall(function() return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end); if s then AvatarImg.Image = img end end)()
 
 local SecAcc = CreateProfileAccordion("Account Information", 2, 200)
 CreateRow(SecAcc, "Display Name").Text = LP.DisplayName
 CreateRow(SecAcc, "Username").Text = "@" .. LP.Name
 CreateRow(SecAcc, "User ID").Text = tostring(LP.UserId)
 CreateRow(SecAcc, "Account Age").Text = LP.AccountAge .. " Days"
-CreateRow(SecAcc, "Join Date").Text = GetDate("%Y-%m-%d", os.time() - (LP.AccountAge * 86400))
-local ValPremium = CreateRow(SecAcc, "Premium"); ValPremium.Text = LP.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"; ValPremium.TextColor3 = LP.MembershipType == Enum.MembershipType.Premium and Hex("#F1C40F") or Color3.new(1, 1, 1)
+CreateRow(SecAcc, "Join Date").Text = os.date("%Y-%m-%d", os.time() - (LP.AccountAge * 86400))
+local ValPremium = CreateRow(SecAcc, "Premium"); ValPremium.Text = LP.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"; ValPremium.TextColor3 = LP.MembershipType == Enum.MembershipType.Premium and Color3.fromHex("#F1C40F") or Color3.new(1, 1, 1)
 
 local ValBio, ValFriends, ValActiveFriends = CreateRow(SecAcc, "Bio"), CreateRow(SecAcc, "Friends"), CreateRow(SecAcc, "Active Friends")
 local function GetAPI(url) local req = request or http_request or (syn and syn.request); if req then local s, r = pcall(function() return req({Url = url, Method = "GET"}) end); if s and r and r.Body then local s2, res = pcall(function() return HttpService:JSONDecode(r.Body) end); if s2 then return res end end end; local s, r = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end); return (s and r) and r or nil end
 
-task.spawn(function() local api = GetAPI("https://users.roproxy.com/v1/users/" .. LP.UserId); ValBio.Text = api and (api.description ~= "" and api.description or "No Bio") or "API Blocked" end)
-task.spawn(function() local api = GetAPI("https://friends.roproxy.com/v1/users/" .. LP.UserId .. "/friends/count"); ValFriends.Text = api and tostring(api.count or 0) or "Error" end)
-task.spawn(function() local s, online = pcall(function() return LP:GetFriendsOnline(200) end); ValActiveFriends.Text = s and tostring(#online) or "Error" end)
+coroutine.wrap(function() local api = GetAPI("https://users.roproxy.com/v1/users/" .. LP.UserId); ValBio.Text = api and (api.description ~= "" and api.description or "No Bio") or "API Blocked" end)()
+coroutine.wrap(function() local api = GetAPI("https://friends.roproxy.com/v1/users/" .. LP.UserId .. "/friends/count"); ValFriends.Text = api and tostring(api.count or 0) or "Error" end)()
+coroutine.wrap(function() local s, online = pcall(function() return LP:GetFriendsOnline(200) end); ValActiveFriends.Text = s and tostring(#online) or "Error" end)()
 
 local SecServer = CreateProfileAccordion("Server Information", 3, 150)
 local ValGame = CreateRow(SecServer, "Game Name"); CreateRow(SecServer, "Place ID").Text = tostring(game.PlaceId); CreateRow(SecServer, "Universe ID").Text = tostring(game.GameId)
@@ -390,15 +372,13 @@ CreateRow(SecServer, "Job ID").Text = game.JobId ~= "" and game.JobId or "Privat
 local ValPlayers = CreateRow(SecServer, "Players")
 local function UpdatePlayerCount() ValPlayers.Text = tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers) end
 UpdatePlayerCount(); Players.PlayerAdded:Connect(UpdatePlayerCount); Players.PlayerRemoving:Connect(UpdatePlayerCount)
-task.spawn(function() local s, info = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId) end); ValGame.Text = s and info.Name or "Unknown Game" end)
+coroutine.wrap(function() local s, info = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId) end); ValGame.Text = s and info.Name or "Unknown Game" end)()
 
 local SecExtra = CreateProfileAccordion("Extra Information", 4, 120)
 CreateRow(SecExtra, "Device").Text = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Mobile" or (UIS.GamepadEnabled and "Console" or "PC")
 CreateRow(SecExtra, "Locale").Text = LocalizationService.SystemLocaleId
-local vStr = "Unknown"
-pcall(function() vStr = RunService:GetClientVersion() end)
-CreateRow(SecExtra, "Roblox Version").Text = vStr
-local ValStatus = CreateRow(SecExtra, "Status"); ValStatus.Text = "Connected"; ValStatus.TextColor3 = Hex("#2ECC71")
+CreateRow(SecExtra, "Roblox Version").Text = version()
+local ValStatus = CreateRow(SecExtra, "Status"); ValStatus.Text = "Connected"; ValStatus.TextColor3 = Color3.fromHex("#2ECC71")
 
 -- // 2. MOVEMENT TAB
 local SetSpeedVisual = CreateSlider(TabMovement, "Walk Speed", 16, 120, 16, Theme.Text, 1, function(v) WalkSpeed = v; local h = Humanoid(); if h then h.WalkSpeed = v end end)
@@ -479,7 +459,7 @@ local function SetPotatoMode(state)
             elseif v:IsA("Decal") or v:IsA("Texture") then if not OriginalGraphics[v].Transparency then OriginalGraphics[v].Transparency = v.Transparency end; v.Transparency = 1
             elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then if not OriginalGraphics[v].Lifetime then OriginalGraphics[v].Lifetime = v.Lifetime end; v.Lifetime = NumberRange.new(0) end
         end
-        task.spawn(function() local des = workspace:GetDescendants(); for i = 1, #des do ApplyPotato(des[i]); if i % 500 == 0 then RunService.Heartbeat:Wait() end end end)
+        coroutine.wrap(function() local des = workspace:GetDescendants(); for i = 1, #des do ApplyPotato(des[i]); if i % 500 == 0 then RunService.Heartbeat:Wait() end end end)()
         if not DescendantConnection then DescendantConnection = workspace.DescendantAdded:Connect(function(v) if ToggleStates.PotatoMode then ApplyPotato(v) end end) end
     else
         FPSBtn.Text = "FPS Booster : OFF"; FPSBtn.BackgroundColor3 = Theme.ButtonOff; Notify("SYSTEM", "Restoring graphics...", 3)
@@ -505,7 +485,7 @@ local function CreateESP(player)
     RemoveESP(player)
 
     local highlight = Instance.new("Highlight")
-    highlight.FillColor = Hex("#E74C3C")
+    highlight.FillColor = Color3.fromHex("#E74C3C")
     highlight.OutlineColor = Color3.new(1, 1, 1)
     highlight.FillTransparency = 0.6
     highlight.OutlineTransparency = 0.1
@@ -614,33 +594,32 @@ Connections.Prompt = ProximityPromptService.PromptButtonHoldBegan:Connect(functi
 local AntiAFKBtn = CreateButton(TabUtility, "Anti AFK : OFF", Theme.ButtonOff, 2, {ID="Mencegah auto kick afk.", EN="Prevents idle kick."})
 local function SetAntiAFK(state) ToggleStates.AntiAFK = state; AntiAFKBtn.Text = state and "Anti AFK : ON" or "Anti AFK : OFF"; AntiAFKBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff end
 AntiAFKBtn.Activated:Connect(function() SetAntiAFK(not ToggleStates.AntiAFK) end)
-Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); task.wait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
+Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); wait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
 
 local KeybindBtn = CreateButton(TabUtility, "Keybind : RightControl", Theme.ButtonDefault, 3, {ID="Ubah tombol GUI.", EN="Change GUI bind."})
-KeybindBtn.Activated:Connect(function() Binding = true; KeybindBtn.Text = "Press any key..."; KeybindBtn.BackgroundColor3 = Hex("#E74C3C") end)
+KeybindBtn.Activated:Connect(function() Binding = true; KeybindBtn.Text = "Press any key..."; KeybindBtn.BackgroundColor3 = Color3.fromHex("#E74C3C") end)
 Connections.Input = UIS.InputBegan:Connect(function(input, gpe)
     if Binding and input.UserInputType == Enum.UserInputType.Keyboard then CurrentKeybind = input.KeyCode; Binding = false; KeybindBtn.Text = "Keybind : " .. input.KeyCode.Name; KeybindBtn.BackgroundColor3 = Theme.ButtonDefault; Notify("SYSTEM", "Keybind changed", 3)
     elseif not gpe and input.KeyCode == CurrentKeybind then ToggleUI() end
 end)
 
 -- ==========================================
--- SMART INSPECTOR & PART TOOLS INTEGRATION
+-- SMART INSPECTOR, ESP PART, GOTO PART (ACCORDION)
 -- ==========================================
-local ToolMouseConn, ToolTouchConn
+local InspectorHolder, InspectorMenu, InspectorScroll, InspectorListUI, UpdateInspectorSize, InspectorToggleBtn, InspectorState = CreateAccordion(TabUtility, "Smart Inspector Tools", Theme.ButtonDefault, 4, {ID="Inspeksi, ESP, dan Pergi ke Part/Model.", EN="Inspect, ESP, and Goto Part/Model."}, 160)
+
+InspectorListUI:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
+    InspectorScroll.CanvasSize = UDim2.new(0, 0, 0, InspectorListUI.AbsoluteContentSize.Y) 
+    if InspectorState.IsOpen then UpdateInspectorSize() end 
+end)
+
+local SmartInspectorBtn = CreateButton(InspectorScroll, "Smart Inspector : OFF", Theme.ButtonOff, 1, {ID="Inspeksi ukuran & model part pintar.", EN="Smart inspect parts & models size."})
 local CurrentSelectionBox = nil
 local CurrentBillboard = nil
-local PartESPHighlights = {}
 
 local function ClearInspector()
     if CurrentSelectionBox then CurrentSelectionBox:Destroy(); CurrentSelectionBox = nil end
     if CurrentBillboard then CurrentBillboard:Destroy(); CurrentBillboard = nil end
-end
-
-local function ClearPartESP()
-    for _, hl in pairs(PartESPHighlights) do
-        if hl then hl:Destroy() end
-    end
-    PartESPHighlights = {}
 end
 
 local function GetSmartTarget(hitPart)
@@ -666,7 +645,7 @@ local function HighlightSmart(hitPart)
     CurrentSelectionBox = Instance.new("SelectionBox")
     CurrentSelectionBox.Adornee = mainTarget
     CurrentSelectionBox.LineThickness = 0.05
-    CurrentSelectionBox.Color3 = Hex("#10B981")
+    CurrentSelectionBox.Color3 = Color3.fromHex("#10B981")
     CurrentSelectionBox.Parent = Gui
     
     CurrentBillboard = Instance.new("BillboardGui")
@@ -678,9 +657,9 @@ local function HighlightSmart(hitPart)
     
     local TextLabel = Instance.new("TextLabel")
     TextLabel.Size = UDim2.new(1, 0, 1, 0)
-    TextLabel.BackgroundColor3 = Hex("#09090B")
+    TextLabel.BackgroundColor3 = Color3.fromHex("#09090B")
     TextLabel.BackgroundTransparency = 0.2
-    TextLabel.TextColor3 = Hex("#10B981")
+    TextLabel.TextColor3 = Color3.fromHex("#10B981")
     TextLabel.TextScaled = true
     TextLabel.Text = mainTarget.Name .. "\n(" .. tostring(math.floor(targetSize.X)) .. ", " .. tostring(math.floor(targetSize.Y)) .. ", " .. tostring(math.floor(targetSize.Z)) .. ")"
     TextLabel.Font = Enum.Font.GothamBold
@@ -688,128 +667,189 @@ local function HighlightSmart(hitPart)
     Corner(TextLabel, 6)
 end
 
-local function HandlePartESPClick(target)
-    if target and (not LP.Character or not target:IsDescendantOf(LP.Character)) then
-        local hasESP = false
-        for _, hl in pairs(PartESPHighlights) do
-            if hl.Adornee == target then hasESP = true; break end
-        end
-        if not hasESP then
-            local hl = Instance.new("Highlight")
-            hl.FillColor = Hex("#F15BB5")
-            hl.OutlineColor = Color3.new(1, 1, 1)
-            hl.FillTransparency = 0.5
-            hl.Parent = target
-            table.insert(PartESPHighlights, hl)
-        end
-    end
-end
-
-local function HandleGotoPartClick(target)
-    if target and (not LP.Character or not target:IsDescendantOf(LP.Character)) then
-        local h = HRP()
-        if h then
-            h.CFrame = target.CFrame * CFrame.new(0, 3, 0)
-            Notify("TELEPORT", "Teleported to " .. target.Name, 3)
-        end
-    end
-end
-
-local function SetupToolConnections()
-    if ToolMouseConn then ToolMouseConn:Disconnect(); ToolMouseConn = nil end
-    if ToolTouchConn then ToolTouchConn:Disconnect(); ToolTouchConn = nil end
+local function SmartRaycast(position)
+    local cam = workspace.CurrentCamera
+    local ray = cam:ViewportPointToRay(position.X, position.Y)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LP.Character, Gui}
     
-    if ToggleStates.SmartInspector or ToggleStates.PartESP or ToggleStates.GotoPart then
-        ToolTouchConn = UIS.TouchTapInWorld:Connect(function(position, processedByUI)
-            if not processedByUI then
-                local cam = workspace.CurrentCamera
-                local ray = cam:ViewportPointToRay(position.X, position.Y)
-                local params = RaycastParams.new()
-                params.FilterType = Enum.RaycastFilterType.Exclude
-                params.FilterDescendantsInstances = {LP.Character, Gui}
-                
-                local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
-                if result and result.Instance then
-                    if ToggleStates.SmartInspector then HighlightSmart(result.Instance)
-                    elseif ToggleStates.PartESP then HandlePartESPClick(result.Instance)
-                    elseif ToggleStates.GotoPart then HandleGotoPartClick(result.Instance) end
-                else
-                    if ToggleStates.SmartInspector then ClearInspector() end
-                end
-            end
-        end)
-        
-        ToolMouseConn = UIS.InputBegan:Connect(function(input, gpe)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 and not gpe then
-                if not UIS:GetFocusedTextBox() then
-                    local mouseLoc = UIS:GetMouseLocation()
-                    local cam = workspace.CurrentCamera
-                    local ray = cam:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
-                    local params = RaycastParams.new()
-                    params.FilterType = Enum.RaycastFilterType.Exclude
-                    params.FilterDescendantsInstances = {LP.Character, Gui}
-                    
-                    local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
-                    if result and result.Instance then
-                        if ToggleStates.SmartInspector then HighlightSmart(result.Instance)
-                        elseif ToggleStates.PartESP then HandlePartESPClick(result.Instance)
-                        elseif ToggleStates.GotoPart then HandleGotoPartClick(result.Instance) end
-                    else
-                        if ToggleStates.SmartInspector then ClearInspector() end
-                    end
-                end
-            end
-        end)
-    end
+    local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+    if result and result.Instance then HighlightSmart(result.Instance) else ClearInspector() end
 end
 
-local _, _, SmartScroll, SmartListUI, UpdateSmartSize, SmartToggleBtn, SmartState = CreateAccordion(TabUtility, "Smart Inspector Menu", Theme.ButtonDefault, 4, {ID="Menu inspeksi & teleport pintar.", EN="Smart inspect & teleport menu."}, 140)
-
-local SmartInspectorBtn = CreateButton(SmartScroll, "Smart Inspector : OFF", Theme.ButtonOff, 1, {ID="Inspeksi ukuran & model part pintar.", EN="Smart inspect parts & models size."})
-SmartInspectorBtn.Size = UDim2.new(1, -6, 0, 28)
-
-local PartESPBtn = CreateButton(SmartScroll, "ESP Part : OFF", Theme.ButtonOff, 2, {ID="Klik part untuk memberikan ESP permanen.", EN="Click a part to give it permanent ESP."})
-PartESPBtn.Size = UDim2.new(1, -6, 0, 28)
-
-local GotoPartBtn = CreateButton(SmartScroll, "Goto Part : OFF", Theme.ButtonOff, 3, {ID="Klik part untuk teleport ke posisinya.", EN="Click a part to teleport to its position."})
-GotoPartBtn.Size = UDim2.new(1, -6, 0, 28)
-
-SmartListUI:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
-    SmartScroll.CanvasSize = UDim2.new(0, 0, 0, SmartListUI.AbsoluteContentSize.Y) 
-    if SmartState.IsOpen then UpdateSmartSize() end 
-end)
-
-local SetSmartInspector, SetPartESP, SetGotoPart
-
-SetSmartInspector = function(state)
-    if state then SetPartESP(false); SetGotoPart(false) end
+local function SetSmartInspector(state)
     ToggleStates.SmartInspector = state
     SmartInspectorBtn.Text = state and "Smart Inspector : ON" or "Smart Inspector : OFF"
     SmartInspectorBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
-    SetupToolConnections()
+    
+    if state then
+        Connections.SmartInspectorTouch = UIS.TouchTapInWorld:Connect(function(position, processedByUI)
+            if not processedByUI then SmartRaycast(position) end
+        end)
+        
+        local Mouse = LP:GetMouse()
+        Connections.SmartInspectorMouse = Mouse.Button1Down:Connect(function()
+            if not UIS:GetFocusedTextBox() then
+                local target = Mouse.Target
+                if target and (not LP.Character or not target:IsDescendantOf(LP.Character)) then HighlightSmart(target) else ClearInspector() end
+            end
+        end)
+    else
+        if Connections.SmartInspectorTouch then Connections.SmartInspectorTouch:Disconnect(); Connections.SmartInspectorTouch = nil end
+        if Connections.SmartInspectorMouse then Connections.SmartInspectorMouse:Disconnect(); Connections.SmartInspectorMouse = nil end
+        ClearInspector()
+    end
 end
-
-SetPartESP = function(state)
-    if state then SetSmartInspector(false); SetGotoPart(false) end
-    ToggleStates.PartESP = state
-    PartESPBtn.Text = state and "ESP Part : ON" or "ESP Part : OFF"
-    PartESPBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
-    if not state then ClearPartESP() end
-    SetupToolConnections()
-end
-
-SetGotoPart = function(state)
-    if state then SetSmartInspector(false); SetPartESP(false) end
-    ToggleStates.GotoPart = state
-    GotoPartBtn.Text = state and "Goto Part : ON" or "Goto Part : OFF"
-    GotoPartBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
-    SetupToolConnections()
-end
-
 SmartInspectorBtn.Activated:Connect(function() SetSmartInspector(not ToggleStates.SmartInspector) end)
-PartESPBtn.Activated:Connect(function() SetPartESP(not ToggleStates.PartESP) end)
-GotoPartBtn.Activated:Connect(function() SetGotoPart(not ToggleStates.GotoPart) end)
 
+-- TextBox untuk Nama Part (Target ESP & GOTO)
+local TargetPartBox = Instance.new("TextBox", InspectorScroll)
+TargetPartBox.Size = UDim2.new(0, 220, 0, 28)
+TargetPartBox.BackgroundColor3 = Theme.BackgroundTop
+TargetPartBox.TextColor3 = Theme.Text
+TargetPartBox.PlaceholderText = "Ketik Nama Part/Model..."
+TargetPartBox.Font = Enum.Font.GothamBold
+TargetPartBox.TextSize = 11
+TargetPartBox.Text = ""
+TargetPartBox.LayoutOrder = 2
+Corner(TargetPartBox, 8)
+
+-- Bagian ESP PART
+local ActivePartESPs = {}
+local function ClearPartESP()
+    for _, esp in pairs(ActivePartESPs) do
+        if esp.Box then esp.Box:Destroy() end
+        if esp.Bill then esp.Bill:Destroy() end
+        if esp.Conn then esp.Conn:Disconnect() end
+    end
+    ActivePartESPs = {}
+end
+
+local function FindTargetsByName(targetName)
+    local found = {}
+    if targetName == "" then return found end
+    local lowerTarget = string.lower(targetName)
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if (obj:IsA("BasePart") or obj:IsA("Model")) and string.find(string.lower(obj.Name), lowerTarget) then
+            table.insert(found, obj)
+        end
+    end
+    return found
+end
+
+local function CreatePartESP(target)
+    local isModel = target:IsA("Model")
+    local basePart = isModel and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
+    if not basePart then return end
+
+    local Box = Instance.new("SelectionBox")
+    Box.Adornee = target
+    Box.LineThickness = 0.05
+    Box.Color3 = Color3.fromHex("#3B82F6")
+    Box.Parent = Gui
+
+    local Bill = Instance.new("BillboardGui")
+    Bill.Adornee = basePart
+    Bill.Size = UDim2.new(0, 150, 0, 40)
+    Bill.StudsOffset = Vector3.new(0, (basePart.Size.Y / 2) + 2, 0)
+    Bill.AlwaysOnTop = true
+    Bill.Parent = Gui
+
+    local Txt = Instance.new("TextLabel")
+    Txt.Size = UDim2.new(1, 0, 1, 0)
+    Txt.BackgroundColor3 = Theme.BackgroundTop
+    Txt.BackgroundTransparency = 0.3
+    Txt.TextColor3 = Color3.new(1, 1, 1)
+    Txt.TextScaled = true
+    Txt.Font = Enum.Font.GothamBold
+    Txt.Parent = Bill
+    Corner(Txt, 6)
+
+    local UIStroke = Instance.new("UIStroke", Txt)
+    UIStroke.Color = Color3.fromHex("#3B82F6")
+    UIStroke.Thickness = 1.5
+
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not target or not target.Parent or not basePart then
+            if Box then Box:Destroy() end
+            if Bill then Bill:Destroy() end
+            if conn then conn:Disconnect() end
+            return
+        end
+
+        local playerPos = HRP() and HRP().Position or Vector3.zero
+        local targetPos = basePart.Position
+        local distance = math.floor((playerPos - targetPos).Magnitude)
+        Txt.Text = target.Name .. "\n[" .. distance .. " Studs]"
+    end)
+
+    table.insert(ActivePartESPs, {Box = Box, Bill = Bill, Conn = conn})
+end
+
+local ESPPartBtn = CreateButton(InspectorScroll, "ESP Part : OFF", Theme.ButtonOff, 3, {ID="Tandai part dengan Box ESP berdasarkan nama.", EN="Highlight parts with Box ESP by name."})
+local function SetESPPart(state)
+    ToggleStates.ESPPart = state
+    ESPPartBtn.Text = state and "ESP Part : ON" or "ESP Part : OFF"
+    ESPPartBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
+
+    if state then
+        ClearPartESP()
+        local targetName = TargetPartBox.Text
+        if targetName ~= "" then
+            local targets = FindTargetsByName(targetName)
+            for _, v in pairs(targets) do CreatePartESP(v) end
+            Notify("ESP PART", "Mencari dan menandai: " .. targetName, 3)
+        else
+            Notify("ESP PART", "Masukkan nama part dulu!", 3)
+            ToggleStates.ESPPart = false
+            ESPPartBtn.Text = "ESP Part : OFF"
+            ESPPartBtn.BackgroundColor3 = Theme.ButtonOff
+        end
+    else
+        ClearPartESP()
+    end
+end
+ESPPartBtn.Activated:Connect(function() SetESPPart(not ToggleStates.ESPPart) end)
+
+-- Bagian GOTO PART
+local GotoPartBtn = CreateButton(InspectorScroll, "Goto Part (Terdekat)", Color3.fromHex("#F59E0B"), 4, {ID="Teleport ke part yang dicari terdekat.", EN="Teleport to nearest searched part."})
+GotoPartBtn.TextColor3 = Color3.new(1, 1, 1)
+GotoPartBtn.Activated:Connect(function()
+    local targetName = TargetPartBox.Text
+    if targetName == "" then Notify("GOTO PART", "Masukkan nama part dulu!", 3) return end
+
+    local targets = FindTargetsByName(targetName)
+    if #targets == 0 then Notify("GOTO PART", "Part tidak ditemukan!", 3) return end
+
+    local playerPos = HRP() and HRP().Position or Vector3.zero
+    local closestTarget = nil
+    local shortestDist = math.huge
+
+    for _, target in pairs(targets) do
+        local isModel = target:IsA("Model")
+        local basePart = isModel and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
+        if basePart then
+            local dist = (playerPos - basePart.Position).Magnitude
+            if dist < shortestDist then
+                shortestDist = dist
+                closestTarget = target
+            end
+        end
+    end
+
+    if closestTarget and HRP() then
+        local hrp = HRP()
+        if closestTarget:IsA("Model") then
+            local cframe = closestTarget:GetBoundingBox()
+            hrp.CFrame = cframe + Vector3.new(0, closestTarget:GetExtentsSize().Y/2 + 2, 0)
+        else
+            hrp.CFrame = closestTarget.CFrame + Vector3.new(0, closestTarget.Size.Y/2 + 2, 0)
+        end
+        Notify("GOTO PART", "Teleported to " .. closestTarget.Name, 3)
+    end
+end)
 
 -- // 5. TELEPORT TAB
 local _, _, PlayerScroll, PlayerListUI, _, TogglePlayerBtn, PlayerState = CreateAccordion(TabTeleport, "Teleport to Player", Theme.ButtonDefault, 1, {ID="Teleport ke pemain lain.", EN="Teleport to other players."}, 140)
@@ -845,7 +885,7 @@ local function CreateDynamicWP(id, cfToSave)
     local NameLbl = Instance.new("TextLabel", Item); NameLbl.Size = UDim2.new(0, 70, 1, 0); NameLbl.Position = UDim2.new(0, 10, 0, 0); NameLbl.BackgroundTransparency = 1; NameLbl.Text = "WP " .. id; NameLbl.TextColor3 = Theme.Text; NameLbl.Font = Enum.Font.GothamBold; NameLbl.TextXAlignment = Enum.TextXAlignment.Left
     
     local TpBtn = Instance.new("TextButton", Item); TpBtn.Size = UDim2.new(0, 35, 0, 22); TpBtn.Position = UDim2.new(1, -110, 0.5, -11); TpBtn.Text = "Go"; TpBtn.BackgroundColor3 = Theme.ButtonDefault; TpBtn.TextColor3 = Theme.Text; TpBtn.Font = Enum.Font.GothamBold; Corner(TpBtn, 6)
-    local EditBtn = Instance.new("TextButton", Item); EditBtn.Size = UDim2.new(0, 35, 0, 22); EditBtn.Position = UDim2.new(1, -70, 0.5, -11); EditBtn.Text = "Set"; EditBtn.BackgroundColor3 = Hex("#F39C12"); EditBtn.TextColor3 = Color3.new(1, 1, 1); EditBtn.Font = Enum.Font.GothamBold; Corner(EditBtn, 6)
+    local EditBtn = Instance.new("TextButton", Item); EditBtn.Size = UDim2.new(0, 35, 0, 22); EditBtn.Position = UDim2.new(1, -70, 0.5, -11); EditBtn.Text = "Set"; EditBtn.BackgroundColor3 = Color3.fromHex("#F39C12"); EditBtn.TextColor3 = Color3.new(1, 1, 1); EditBtn.Font = Enum.Font.GothamBold; Corner(EditBtn, 6)
     local DelBtn = Instance.new("TextButton", Item); DelBtn.Size = UDim2.new(0, 25, 0, 22); DelBtn.Position = UDim2.new(1, -30, 0.5, -11); DelBtn.Text = "X"; DelBtn.Font = Enum.Font.GothamBold; DelBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50); DelBtn.TextColor3 = Color3.new(1,1,1); Corner(DelBtn, 6)
     
     TpBtn.Activated:Connect(function() local h = HRP(); if h and Waypoints[id] then h.CFrame = Waypoints[id] end end)
@@ -869,10 +909,10 @@ local function GetNextWPId()
 end
 AddWPBtn.Activated:Connect(function() local h = HRP(); if h then CreateDynamicWP(GetNextWPId(), h.CFrame) end end)
 
-local _, _, HopScroll = CreateAccordion(TabTeleport, "Server Hop", Hex("#6D28D9"), 3, {ID="Pindah ke server publik lain.", EN="Hop to another server."}, 100)
+local _, _, HopScroll = CreateAccordion(TabTeleport, "Server Hop", Color3.fromHex("#6D28D9"), 3, {ID="Pindah ke server publik lain.", EN="Hop to another server."}, 100)
 local function PerformServerHop(isCrowded)
     Notify("SERVER", CurrentLanguage == "ID" and "Nyari server..." or "Searching server...", 4)
-    task.spawn(function()
+    coroutine.wrap(function()
         local Api = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=" .. (isCrowded and "Desc" or "Asc") .. "&limit=100"
         local s, res = pcall(function() return HttpService:JSONDecode(game:HttpGet(Api)) end)
         if s and res and res.data then
@@ -883,15 +923,15 @@ local function PerformServerHop(isCrowded)
             end
             Notify("SERVER", "No server found, try again.", 3)
         else Notify("ERROR", "Failed to fetch servers.", 3) end
-    end)
+    end)()
 end
 
 local HopBtnContainer = Instance.new("Frame", HopScroll); HopBtnContainer.Size = UDim2.new(1, -6, 0, 28); HopBtnContainer.BackgroundTransparency = 1; HopBtnContainer.LayoutOrder = 1
-local HopEmptyBtn = CreateButton(HopBtnContainer, "Hop (Sepi)", Hex("#1D4ED8"), 1); HopEmptyBtn.Size = UDim2.new(0.5, -2, 1, 0); HopEmptyBtn.TextColor3 = Color3.new(1, 1, 1); HopEmptyBtn.Activated:Connect(function() PerformServerHop(false) end); RegisterDynamicLang(HopEmptyBtn, "Hop (Sepi)", "Hop (Empty)")
-local HopCrowdedBtn = CreateButton(HopBtnContainer, "Hop (Rame)", Hex("#BE185D"), 2); HopCrowdedBtn.Size = UDim2.new(0.5, -2, 1, 0); HopCrowdedBtn.AnchorPoint = Vector2.new(1, 0); HopCrowdedBtn.Position = UDim2.new(1, 0, 0, 0); HopCrowdedBtn.TextColor3 = Color3.new(1, 1, 1); HopCrowdedBtn.Activated:Connect(function() PerformServerHop(true) end); RegisterDynamicLang(HopCrowdedBtn, "Hop (Rame)", "Hop (Crowded)")
+local HopEmptyBtn = CreateButton(HopBtnContainer, "Hop (Sepi)", Color3.fromHex("#1D4ED8"), 1); HopEmptyBtn.Size = UDim2.new(0.5, -2, 1, 0); HopEmptyBtn.TextColor3 = Color3.new(1, 1, 1); HopEmptyBtn.Activated:Connect(function() PerformServerHop(false) end); RegisterDynamicLang(HopEmptyBtn, "Hop (Sepi)", "Hop (Empty)")
+local HopCrowdedBtn = CreateButton(HopBtnContainer, "Hop (Rame)", Color3.fromHex("#BE185D"), 2); HopCrowdedBtn.Size = UDim2.new(0.5, -2, 1, 0); HopCrowdedBtn.AnchorPoint = Vector2.new(1, 0); HopCrowdedBtn.Position = UDim2.new(1, 0, 0, 0); HopCrowdedBtn.TextColor3 = Color3.new(1, 1, 1); HopCrowdedBtn.Activated:Connect(function() PerformServerHop(true) end); RegisterDynamicLang(HopCrowdedBtn, "Hop (Rame)", "Hop (Crowded)")
 HopScroll.CanvasSize = UDim2.new(0, 0, 0, 30)
 
-local RejoinBtn = CreateButton(TabTeleport, "Rejoin", Hex("#E74C3C"), 4, {ID="Masuk ulang server sama.", EN="Rejoin same server."}); RejoinBtn.TextColor3 = Color3.new(1, 1, 1)
+local RejoinBtn = CreateButton(TabTeleport, "Rejoin", Color3.fromHex("#E74C3C"), 4, {ID="Masuk ulang server sama.", EN="Rejoin same server."}); RejoinBtn.TextColor3 = Color3.new(1, 1, 1)
 RejoinBtn.Activated:Connect(function() 
     Notify("SERVER", "Rejoining...", 3)
     if game.JobId == "" then TeleportService:Teleport(game.PlaceId, LP) else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end
@@ -899,8 +939,8 @@ end)
 
 -- // 6. CONFIG TAB
 local ConfigInput = Instance.new("TextBox", TabConfig); ConfigInput.Size = UDim2.new(0, 220, 0, 28); ConfigInput.BackgroundColor3 = Theme.BackgroundTop; ConfigInput.TextColor3 = Theme.Text; ConfigInput.Font = Enum.Font.GothamBold; ConfigInput.TextSize = 11; ConfigInput.PlaceholderText = "(nama config)"; ConfigInput.Text = ""; ConfigInput.LayoutOrder = 1; Corner(ConfigInput, 8)
-local SaveBtn = CreateButton(TabConfig, "Save Config", Hex("#0F766E"), 2, {ID="Simpan setingan.", EN="Save settings."}); SaveBtn.TextColor3 = Color3.new(1, 1, 1)
-local _, _, LoadScroll, LoadListUI, _, ToggleLoadBtn, LoadState = CreateAccordion(TabConfig, "Load Config", Hex("#4338CA"), 3, {ID="Muat setingan.", EN="Load settings."}, 120)
+local SaveBtn = CreateButton(TabConfig, "Save Config", Color3.fromHex("#0F766E"), 2, {ID="Simpan setingan.", EN="Save settings."}); SaveBtn.TextColor3 = Color3.new(1, 1, 1)
+local _, _, LoadScroll, LoadListUI, _, ToggleLoadBtn, LoadState = CreateAccordion(TabConfig, "Load Config", Color3.fromHex("#4338CA"), 3, {ID="Muat setingan.", EN="Load settings."}, 120)
 
 local function GetConfigPath(name) return ConfigFolder .. "/" .. string.gsub(name=="" and "ConfigUtama" or name, "[^%w_]", "") .. ".json" end
 
@@ -916,9 +956,6 @@ local function LoadConfigData(path)
             if res.ESP ~= ToggleStates.ESP then SetESP(res.ESP) end
             if res.Fullbright ~= ToggleStates.Fullbright then SetFullbright(res.Fullbright) end
             if res.Nofog ~= ToggleStates.Nofog then SetNofog(res.Nofog) end
-            if res.SmartInspector ~= ToggleStates.SmartInspector then SetSmartInspector(res.SmartInspector) end
-            if res.PartESP ~= ToggleStates.PartESP then SetPartESP(res.PartESP) end
-            if res.GotoPart ~= ToggleStates.GotoPart then SetGotoPart(res.GotoPart) end
             if res.Waypoints then for id, cData in pairs(res.Waypoints) do CreateDynamicWP(tonumber(id) or id, CFrame.new(unpack(cData))) end end
             Notify("CONFIG", "Loaded from " .. path, 3)
         else Notify("ERROR", "Data config corrupt!", 3) end
@@ -952,29 +989,27 @@ end
 ToggleLoadBtn.Activated:Connect(function() if LoadState.IsOpen then RefreshConfigList() end end)
 SaveBtn.Activated:Connect(function()
     if writefile then
-        local data = { WalkSpeed = WalkSpeed, JumpPower = JumpPower, FOV = CurrentFOV, FlySpeed = FlySpeed, Keybind = CurrentKeybind.Name, InfJump = ToggleStates.InfJump, Noclip = ToggleStates.Noclip, InstantPrompt = ToggleStates.InstantPrompt, MaxZoom = ToggleStates.MaxZoom, AntiAFK = ToggleStates.AntiAFK, PotatoMode = ToggleStates.PotatoMode, ESP = ToggleStates.ESP, Fullbright = ToggleStates.Fullbright, Nofog = ToggleStates.Nofog, SmartInspector = ToggleStates.SmartInspector, PartESP = ToggleStates.PartESP, GotoPart = ToggleStates.GotoPart, Waypoints = {} }
+        local data = { WalkSpeed = WalkSpeed, JumpPower = JumpPower, FOV = CurrentFOV, FlySpeed = FlySpeed, Keybind = CurrentKeybind.Name, InfJump = ToggleStates.InfJump, Noclip = ToggleStates.Noclip, InstantPrompt = ToggleStates.InstantPrompt, MaxZoom = ToggleStates.MaxZoom, AntiAFK = ToggleStates.AntiAFK, PotatoMode = ToggleStates.PotatoMode, ESP = ToggleStates.ESP, Fullbright = ToggleStates.Fullbright, Nofog = ToggleStates.Nofog, Waypoints = {} }
         for id, cf in pairs(Waypoints) do data.Waypoints[tostring(id)] = {cf:GetComponents()} end
         local s = pcall(function() writefile(GetConfigPath(ConfigInput.Text), HttpService:JSONEncode(data)) end)
         if s then Notify("CONFIG", "Saved to " .. GetConfigPath(ConfigInput.Text), 3); if LoadState.IsOpen then RefreshConfigList() end else Notify("ERROR", "Gagal menyimpan config!", 3) end
     else Notify("ERROR", "Executor tidak support WriteFile!", 3) end
 end)
 
-local UnloadBtn = CreateButton(TabConfig, "Unload Script", Hex("#C0392B"), 4, {ID="Hapus script dari layar.", EN="Remove script."}); UnloadBtn.TextColor3 = Color3.new(1, 1, 1)
+local UnloadBtn = CreateButton(TabConfig, "Unload Script", Color3.fromHex("#C0392B"), 4, {ID="Hapus script dari layar.", EN="Remove script."}); UnloadBtn.TextColor3 = Color3.new(1, 1, 1)
 UnloadBtn.Activated:Connect(function()
     if StatsConnection then StatsConnection:Disconnect() end; if DescendantConnection then DescendantConnection:Disconnect() end
     if SpeedConnection then SpeedConnection:Disconnect() end; if JumpConnection then JumpConnection:Disconnect() end
-    if ToolMouseConn then ToolMouseConn:Disconnect() end; if ToolTouchConn then ToolTouchConn:Disconnect() end
     for _, conn in pairs(Connections) do if conn and conn.Disconnect then conn:Disconnect() end end
-    ClearInspector(); ClearPartESP()
-    SetNoclip(false); SetFly(false); SetPotatoMode(false); SetInfJump(false); SetInstantPrompt(false); SetMaxZoom(false); SetAntiAFK(false); SetESP(false); SetSmartInspector(false); SetPartESP(false); SetGotoPart(false); SetFullbright(false); SetNofog(false)
+    SetNoclip(false); SetFly(false); SetPotatoMode(false); SetInfJump(false); SetInstantPrompt(false); SetMaxZoom(false); SetAntiAFK(false); SetESP(false); SetSmartInspector(false); SetFullbright(false); SetNofog(false); SetESPPart(false)
     UIBlur:Destroy(); Gui:Destroy()
 end)
 
 for _, data in ipairs(DynamicLabels) do if data.Obj then data.Obj.Text = CurrentLanguage == "ID" and data.ID or data.EN end end
 
-task.spawn(function()
+coroutine.wrap(function()
     ToggleUI(); local sound = Instance.new("Sound", workspace); sound.SoundId = "rbxassetid://6042053626"; sound.Volume = 0.5; sound:Play()
     Notify("SYSTEM", "Mamet Utility Pro V7.17.4 Loaded", 5)
     if AntiDetectActive then Notify("SECURITY", "Anti-Cheat Bypass Active", 5) end
-    task.delay(5, function() sound:Destroy() end)
-end)
+    delay(5, function() sound:Destroy() end)
+end)()
