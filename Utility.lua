@@ -1,4 +1,4 @@
---// MAMET UTILITY PRO (TABBED EDITION - V7.17.4 - SUPER OPTIMIZED + SMART ESP + SMART INSPECTOR + GOTO)
+--// MAMET UTILITY PRO (TABBED EDITION - V7.17.4 - SUPER OPTIMIZED + SMART ESP + SMART INSPECTOR)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -38,7 +38,7 @@ local Binding = false
 local ToggleStates = {
     InfJump = false, Noclip = false, Fly = false,
     InstantPrompt = false, MaxZoom = false, AntiAFK = false, PotatoMode = false, ESP = false,
-    SmartInspector = false, PartESP = false, Fullbright = false, Nofog = false
+    SmartInspector = false, Fullbright = false, Nofog = false
 }
 
 -- Config Folder Setup
@@ -604,12 +604,9 @@ Connections.Input = UIS.InputBegan:Connect(function(input, gpe)
 end)
 
 -- ==========================================
--- SMART UTILITY (INSPECTOR, ESP PART, GOTO PART)
+-- SMART PART INSPECTOR INTEGRATION
 -- ==========================================
-local _, _, SmartScroll, SmartListUI, UpdateSmartSize, _, SmartState = CreateAccordion(TabUtility, "Smart Utility Menu", Color3.fromHex("#E67E22"), 4, {ID="Cari, ESP, Goto, & Inspeksi Part.", EN="Search, ESP, Goto, & Inspect Parts."}, 160)
-
--- 1. Smart Inspector Toggle
-local SmartInspectorBtn = CreateButton(SmartScroll, "Smart Inspector : OFF", Theme.ButtonOff, 1)
+local SmartInspectorBtn = CreateButton(TabUtility, "Smart Inspector : OFF", Theme.ButtonOff, 4, {ID="Inspeksi ukuran & model part pintar.", EN="Smart inspect parts & models size."})
 local CurrentSelectionBox = nil
 local CurrentBillboard = nil
 
@@ -629,7 +626,14 @@ local function HighlightSmart(hitPart)
     if not hitPart or not hitPart:IsA("BasePart") then return end
     
     local mainTarget, basePart = GetSmartTarget(hitPart)
-    local targetSize = mainTarget:IsA("Model") and select(2, mainTarget:GetBoundingBox()) or mainTarget.Size
+    local targetSize = Vector3.zero
+    
+    if mainTarget:IsA("Model") then
+        local orientation, size = mainTarget:GetBoundingBox()
+        targetSize = size
+    else
+        targetSize = mainTarget.Size
+    end
     
     CurrentSelectionBox = Instance.new("SelectionBox")
     CurrentSelectionBox.Adornee = mainTarget
@@ -650,7 +654,7 @@ local function HighlightSmart(hitPart)
     TextLabel.BackgroundTransparency = 0.2
     TextLabel.TextColor3 = Color3.fromHex("#10B981")
     TextLabel.TextScaled = true
-    TextLabel.Text = mainTarget.Name .. "\n(" .. math.floor(targetSize.X) .. ", " .. math.floor(targetSize.Y) .. ", " .. math.floor(targetSize.Z) .. ")"
+    TextLabel.Text = mainTarget.Name .. "\n(" .. tostring(math.floor(targetSize.X)) .. ", " .. tostring(math.floor(targetSize.Y)) .. ", " .. tostring(math.floor(targetSize.Z)) .. ")"
     TextLabel.Font = Enum.Font.GothamBold
     TextLabel.Parent = CurrentBillboard
     Corner(TextLabel, 6)
@@ -691,164 +695,6 @@ local function SetSmartInspector(state)
     end
 end
 SmartInspectorBtn.Activated:Connect(function() SetSmartInspector(not ToggleStates.SmartInspector) end)
-
--- 2. Input Box Target
-local PartTargetBox = Instance.new("TextBox", SmartScroll)
-PartTargetBox.Size = UDim2.new(0, 220, 0, 28)
-PartTargetBox.BackgroundColor3 = Theme.BackgroundTop
-PartTargetBox.TextColor3 = Theme.Text
-PartTargetBox.Font = Enum.Font.GothamBold
-PartTargetBox.TextSize = 11
-PartTargetBox.PlaceholderText = "Ketik Nama Part..."
-PartTargetBox.Text = ""
-PartTargetBox.LayoutOrder = 2
-PartTargetBox.ClearTextOnFocus = false
-Corner(PartTargetBox, 8)
-
--- Helper Pencarian Target
-local function FindTargetsByName(targetName)
-    local found = {}
-    if targetName == "" then return found end
-    local lowerTarget = string.lower(targetName)
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if (obj:IsA("BasePart") or obj:IsA("Model")) and string.find(string.lower(obj.Name), lowerTarget) then
-            table.insert(found, obj)
-        end
-    end
-    return found
-end
-
-local function GetPlayerPos()
-    if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then return LP.Character.HumanoidRootPart.Position end
-    return Vector3.zero
-end
-
--- 3. ESP Part
-local PartESPBtn = CreateButton(SmartScroll, "ESP Target : OFF", Theme.ButtonOff, 3)
-local ActivePartESPs = {}
-
-local function ClearPartESP()
-    for _, esp in pairs(ActivePartESPs) do
-        if esp.Box then esp.Box:Destroy() end
-        if esp.Bill then esp.Bill:Destroy() end
-        if esp.Conn then esp.Conn:Disconnect() end
-    end
-    ActivePartESPs = {}
-end
-
-local function CreateESPForPartTarget(target)
-    local isModel = target:IsA("Model")
-    local basePart = isModel and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
-    if not basePart then return end
-
-    local Box = Instance.new("SelectionBox")
-    Box.Adornee = target
-    Box.LineThickness = 0.05
-    Box.Color3 = Color3.fromHex("#3B82F6")
-    Box.SurfaceTransparency = 0.8
-    Box.SurfaceColor3 = Color3.fromHex("#3B82F6")
-    Box.Parent = Gui
-
-    local Bill = Instance.new("BillboardGui")
-    Bill.Adornee = basePart
-    Bill.Size = UDim2.new(0, 150, 0, 40)
-    Bill.StudsOffset = Vector3.new(0, (basePart.Size.Y / 2) + 2, 0)
-    Bill.AlwaysOnTop = true
-    Bill.Parent = Gui
-
-    local Txt = Instance.new("TextLabel")
-    Txt.Size = UDim2.new(1, 0, 1, 0)
-    Txt.BackgroundColor3 = Color3.fromHex("#09090B")
-    Txt.BackgroundTransparency = 0.3
-    Txt.TextColor3 = Color3.new(1, 1, 1)
-    Txt.TextScaled = true
-    Txt.Font = Enum.Font.GothamBold
-    Txt.Parent = Bill
-    Corner(Txt, 6)
-
-    local UIStroke = Instance.new("UIStroke", Txt)
-    UIStroke.Color = Color3.fromHex("#3B82F6")
-    UIStroke.Thickness = 1.5
-
-    local conn
-    conn = RunService.RenderStepped:Connect(function()
-        if not target or not target.Parent or not basePart then
-            Box:Destroy(); Bill:Destroy(); conn:Disconnect()
-            return
-        end
-        local playerPos = GetPlayerPos()
-        local distance = math.floor((playerPos - basePart.Position).Magnitude)
-        Txt.Text = target.Name .. "\n[" .. distance .. " Studs]"
-    end)
-    table.insert(ActivePartESPs, {Box = Box, Bill = Bill, Conn = conn})
-end
-
-PartESPBtn.Activated:Connect(function()
-    ToggleStates.PartESP = not ToggleStates.PartESP
-    if ToggleStates.PartESP then
-        ClearPartESP()
-        local targetName = PartTargetBox.Text
-        if targetName == "" then 
-            ToggleStates.PartESP = false 
-            Notify("ESP PART", "Masukkan nama part terlebih dahulu!", 3)
-            return 
-        end
-        PartESPBtn.BackgroundColor3 = Theme.ButtonOn
-        PartESPBtn.Text = "ESP Target : ON"
-        local targets = FindTargetsByName(targetName)
-        if #targets == 0 then Notify("ESP PART", "Part tidak ditemukan!", 3) end
-        for _, v in pairs(targets) do CreateESPForPartTarget(v) end
-    else
-        PartESPBtn.BackgroundColor3 = Theme.ButtonOff
-        PartESPBtn.Text = "ESP Target : OFF"
-        ClearPartESP()
-    end
-end)
-
--- 4. Goto Part
-local GotoPartBtn = CreateButton(SmartScroll, "Goto Target (Terdekat)", Color3.fromHex("#3B82F6"), 4)
-GotoPartBtn.TextColor3 = Color3.new(1, 1, 1)
-GotoPartBtn.Activated:Connect(function()
-    local targetName = PartTargetBox.Text
-    if targetName == "" then Notify("GOTO PART", "Masukkan nama part!", 3) return end
-    
-    local targets = FindTargetsByName(targetName)
-    if #targets == 0 then Notify("GOTO PART", "Part tidak ditemukan!", 3) return end
-
-    local playerPos = GetPlayerPos()
-    local closestTarget = nil
-    local shortestDist = math.huge
-
-    for _, target in pairs(targets) do
-        local isModel = target:IsA("Model")
-        local basePart = isModel and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
-        if basePart then
-            local dist = (playerPos - basePart.Position).Magnitude
-            if dist < shortestDist then
-                shortestDist = dist
-                closestTarget = target
-            end
-        end
-    end
-
-    if closestTarget and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
-        local hrp = LP.Character.HumanoidRootPart
-        if closestTarget:IsA("Model") then
-            local cframe, size = closestTarget:GetBoundingBox()
-            hrp.CFrame = cframe + Vector3.new(0, size.Y/2 + 2, 0)
-        else
-            hrp.CFrame = closestTarget.CFrame + Vector3.new(0, closestTarget.Size.Y/2 + 2, 0)
-        end
-        Notify("GOTO PART", "Teleporting to " .. closestTarget.Name, 3)
-    end
-end)
-
--- Update Scroll Size for Accordion
-SmartListUI:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
-    SmartScroll.CanvasSize = UDim2.new(0, 0, 0, SmartListUI.AbsoluteContentSize.Y + 10) 
-    if SmartState.IsOpen then UpdateSmartSize() end 
-end)
--- ==========================================
 
 -- // 5. TELEPORT TAB
 local _, _, PlayerScroll, PlayerListUI, _, TogglePlayerBtn, PlayerState = CreateAccordion(TabTeleport, "Teleport to Player", Theme.ButtonDefault, 1, {ID="Teleport ke pemain lain.", EN="Teleport to other players."}, 140)
@@ -1001,7 +847,6 @@ UnloadBtn.Activated:Connect(function()
     if SpeedConnection then SpeedConnection:Disconnect() end; if JumpConnection then JumpConnection:Disconnect() end
     for _, conn in pairs(Connections) do if conn and conn.Disconnect then conn:Disconnect() end end
     SetNoclip(false); SetFly(false); SetPotatoMode(false); SetInfJump(false); SetInstantPrompt(false); SetMaxZoom(false); SetAntiAFK(false); SetESP(false); SetSmartInspector(false); SetFullbright(false); SetNofog(false)
-    if ClearPartESP then ClearPartESP() end
     UIBlur:Destroy(); Gui:Destroy()
 end)
 
