@@ -1,3 +1,4 @@
+--// MAMET UTILITY PRO (TABBED EDITION - V7.17.4 - SUPER OPTIMIZED + SMART ESP + SMART INSPECTOR)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -10,9 +11,6 @@ local TeleportService = game:GetService("TeleportService")
 local StatsService = game:GetService("Stats")
 local MarketplaceService = game:GetService("MarketplaceService")
 local LocalizationService = game:GetService("LocalizationService")
-
--- Fix untuk executor yang memindahkan fungsi global
-local unpack = unpack or table.unpack
 
 local LP = Players.LocalPlayer
 local Waypoints = {}
@@ -40,7 +38,7 @@ local Binding = false
 local ToggleStates = {
     InfJump = false, Noclip = false, Fly = false,
     InstantPrompt = false, MaxZoom = false, AntiAFK = false, PotatoMode = false, ESP = false,
-    SmartInspector = false, Fullbright = false, Nofog = false, ESPPart = false
+    SmartInspector = false, Fullbright = false, Nofog = false
 }
 
 -- Config Folder Setup
@@ -97,11 +95,7 @@ local IsDarkMode = true
 local CurrentLanguage = "ID"
 local DynamicLabels = {}
 
-local function RegisterDynamicLang(obj, textID, textEN) 
-    table.insert(DynamicLabels, {Obj = obj, ID = textID, EN = textEN}); 
-    obj.Text = CurrentLanguage == "ID" and textID or textEN 
-end
-
+local function RegisterDynamicLang(obj, textID, textEN) table.insert(DynamicLabels, {Obj = obj, ID = textID, EN = textEN}); obj.Text = CurrentLanguage == "ID" and textID or textEN end
 local UIBlur = Instance.new("BlurEffect", Lighting); UIBlur.Name = "MametUIBlur"; UIBlur.Size = 0 
 local Gui = Instance.new("ScreenGui", game.CoreGui); Gui.Name = "MametUtility"
 
@@ -113,14 +107,9 @@ local function CustomDrag(hitPart, targetGui)
     local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
     local conn1 = hitPart.InputBegan:Connect(function(input)
         if ActiveSlider or ActiveScroll then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
-            dragging = true; dragStart = input.Position; startPos = targetGui.Position; 
-            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end) 
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true; dragStart = input.Position; startPos = targetGui.Position; input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end) end
     end)
-    local conn2 = hitPart.InputChanged:Connect(function(input) 
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end 
-    end)
+    local conn2 = hitPart.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
     local conn3 = UIS.InputChanged:Connect(function(input)
         if input == dragInput and dragging and not ActiveSlider and not ActiveScroll then
             local delta = input.Position - dragStart; targetGui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
@@ -294,7 +283,7 @@ local function CreateSlider(parent, name, min, max, default, color, layoutOrder,
 
     local startX
     Bar.InputBegan:Connect(function(input) if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and ActiveSlider == nil then startX = input.Position.X end end)
-    Bar.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then if startX then if math.abs(input.Position.X - startX) < 5 and ActiveSlider == nil then Update(input.Position.X) end; startX = nil end end end)
+    Bar.InputEnded:Connect(function(input) if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and startX then if math.abs(input.Position.X - startX) < 5 and ActiveSlider == nil then Update(input.Position.X) end; startX = nil end end)
     local function SetVisual(val) local p = math.clamp((val - min) / (max - min), 0, 1); Fill.Size = UDim2.new(p, 0, 1, 0); Handle.Position = UDim2.new(p, 0, 0.5, 0); Label.Text = name .. " : " .. val end
     SetVisual(default); return SetVisual
 end
@@ -615,16 +604,9 @@ Connections.Input = UIS.InputBegan:Connect(function(input, gpe)
 end)
 
 -- ==========================================
--- SMART INSPECTOR, ESP PART, GOTO PART (ACCORDION)
+-- SMART PART INSPECTOR INTEGRATION
 -- ==========================================
-local InspectorHolder, InspectorMenu, InspectorScroll, InspectorListUI, UpdateInspectorSize, InspectorToggleBtn, InspectorState = CreateAccordion(TabUtility, "Smart Inspector Tools", Theme.ButtonDefault, 4, {ID="Inspeksi, ESP, dan Pergi ke Part/Model.", EN="Inspect, ESP, and Goto Part/Model."}, 160)
-
-InspectorListUI:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
-    InspectorScroll.CanvasSize = UDim2.new(0, 0, 0, InspectorListUI.AbsoluteContentSize.Y) 
-    if InspectorState.IsOpen then UpdateInspectorSize() end 
-end)
-
-local SmartInspectorBtn = CreateButton(InspectorScroll, "Smart Inspector : OFF", Theme.ButtonOff, 1, {ID="Inspeksi ukuran & model part pintar.", EN="Smart inspect parts & models size."})
+local SmartInspectorBtn = CreateButton(TabUtility, "Smart Inspector : OFF", Theme.ButtonOff, 4, {ID="Inspeksi ukuran & model part pintar.", EN="Smart inspect parts & models size."})
 local CurrentSelectionBox = nil
 local CurrentBillboard = nil
 
@@ -713,154 +695,6 @@ local function SetSmartInspector(state)
     end
 end
 SmartInspectorBtn.Activated:Connect(function() SetSmartInspector(not ToggleStates.SmartInspector) end)
-
--- TextBox untuk Nama Part (Target ESP & GOTO)
-local TargetPartBox = Instance.new("TextBox", InspectorScroll)
-TargetPartBox.Size = UDim2.new(0, 220, 0, 28)
-TargetPartBox.BackgroundColor3 = Theme.BackgroundTop
-TargetPartBox.TextColor3 = Theme.Text
-TargetPartBox.PlaceholderText = "Ketik Nama Part/Model..."
-TargetPartBox.Font = Enum.Font.GothamBold
-TargetPartBox.TextSize = 11
-TargetPartBox.Text = ""
-TargetPartBox.LayoutOrder = 2
-Corner(TargetPartBox, 8)
-
--- Bagian ESP PART
-local ActivePartESPs = {}
-local function ClearPartESP()
-    for _, esp in pairs(ActivePartESPs) do
-        if esp.Box then esp.Box:Destroy() end
-        if esp.Bill then esp.Bill:Destroy() end
-        if esp.Conn then esp.Conn:Disconnect() end
-    end
-    ActivePartESPs = {}
-end
-
-local function FindTargetsByName(targetName)
-    local found = {}
-    if targetName == "" then return found end
-    local lowerTarget = string.lower(targetName)
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if (obj:IsA("BasePart") or obj:IsA("Model")) and string.find(string.lower(obj.Name), lowerTarget) then
-            table.insert(found, obj)
-        end
-    end
-    return found
-end
-
-local function CreatePartESP(target)
-    local isModel = target:IsA("Model")
-    local basePart = isModel and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
-    if not basePart then return end
-
-    local Box = Instance.new("SelectionBox")
-    Box.Adornee = target
-    Box.LineThickness = 0.05
-    Box.Color3 = Color3.fromHex("#3B82F6")
-    Box.Parent = Gui
-
-    local Bill = Instance.new("BillboardGui")
-    Bill.Adornee = basePart
-    Bill.Size = UDim2.new(0, 150, 0, 40)
-    Bill.StudsOffset = Vector3.new(0, (basePart.Size.Y / 2) + 2, 0)
-    Bill.AlwaysOnTop = true
-    Bill.Parent = Gui
-
-    local Txt = Instance.new("TextLabel")
-    Txt.Size = UDim2.new(1, 0, 1, 0)
-    Txt.BackgroundColor3 = Theme.BackgroundTop
-    Txt.BackgroundTransparency = 0.3
-    Txt.TextColor3 = Color3.new(1, 1, 1)
-    Txt.TextScaled = true
-    Txt.Font = Enum.Font.GothamBold
-    Txt.Parent = Bill
-    Corner(Txt, 6)
-
-    local UIStroke = Instance.new("UIStroke", Txt)
-    UIStroke.Color = Color3.fromHex("#3B82F6")
-    UIStroke.Thickness = 1.5
-
-    local conn
-    conn = RunService.RenderStepped:Connect(function()
-        if not target or not target.Parent or not basePart then
-            if Box then Box:Destroy() end
-            if Bill then Bill:Destroy() end
-            if conn then conn:Disconnect() end
-            return
-        end
-
-        local playerPos = HRP() and HRP().Position or Vector3.zero
-        local targetPos = basePart.Position
-        local distance = math.floor((playerPos - targetPos).Magnitude)
-        Txt.Text = target.Name .. "\n[" .. distance .. " Studs]"
-    end)
-
-    table.insert(ActivePartESPs, {Box = Box, Bill = Bill, Conn = conn})
-end
-
-local ESPPartBtn = CreateButton(InspectorScroll, "ESP Part : OFF", Theme.ButtonOff, 3, {ID="Tandai part dengan Box ESP berdasarkan nama.", EN="Highlight parts with Box ESP by name."})
-local function SetESPPart(state)
-    ToggleStates.ESPPart = state
-    ESPPartBtn.Text = state and "ESP Part : ON" or "ESP Part : OFF"
-    ESPPartBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
-
-    if state then
-        ClearPartESP()
-        local targetName = TargetPartBox.Text
-        if targetName ~= "" then
-            local targets = FindTargetsByName(targetName)
-            for _, v in pairs(targets) do CreatePartESP(v) end
-            Notify("ESP PART", "Mencari dan menandai: " .. targetName, 3)
-        else
-            Notify("ESP PART", "Masukkan nama part dulu!", 3)
-            ToggleStates.ESPPart = false
-            ESPPartBtn.Text = "ESP Part : OFF"
-            ESPPartBtn.BackgroundColor3 = Theme.ButtonOff
-        end
-    else
-        ClearPartESP()
-    end
-end
-ESPPartBtn.Activated:Connect(function() SetESPPart(not ToggleStates.ESPPart) end)
-
--- Bagian GOTO PART
-local GotoPartBtn = CreateButton(InspectorScroll, "Goto Part (Terdekat)", Color3.fromHex("#F59E0B"), 4, {ID="Teleport ke part yang dicari terdekat.", EN="Teleport to nearest searched part."})
-GotoPartBtn.TextColor3 = Color3.new(1, 1, 1)
-GotoPartBtn.Activated:Connect(function()
-    local targetName = TargetPartBox.Text
-    if targetName == "" then Notify("GOTO PART", "Masukkan nama part dulu!", 3) return end
-
-    local targets = FindTargetsByName(targetName)
-    if #targets == 0 then Notify("GOTO PART", "Part tidak ditemukan!", 3) return end
-
-    local playerPos = HRP() and HRP().Position or Vector3.zero
-    local closestTarget = nil
-    local shortestDist = math.huge
-
-    for _, target in pairs(targets) do
-        local isModel = target:IsA("Model")
-        local basePart = isModel and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
-        if basePart then
-            local dist = (playerPos - basePart.Position).Magnitude
-            if dist < shortestDist then
-                shortestDist = dist
-                closestTarget = target
-            end
-        end
-    end
-
-    if closestTarget and HRP() then
-        local hrp = HRP()
-        if closestTarget:IsA("Model") then
-            local cframe = closestTarget:GetBoundingBox()
-            hrp.CFrame = cframe + Vector3.new(0, closestTarget:GetExtentsSize().Y/2 + 2, 0)
-        else
-            hrp.CFrame = closestTarget.CFrame + Vector3.new(0, closestTarget.Size.Y/2 + 2, 0)
-        end
-        Notify("GOTO PART", "Teleported to " .. closestTarget.Name, 3)
-    end
-end)
 
 -- // 5. TELEPORT TAB
 local _, _, PlayerScroll, PlayerListUI, _, TogglePlayerBtn, PlayerState = CreateAccordion(TabTeleport, "Teleport to Player", Theme.ButtonDefault, 1, {ID="Teleport ke pemain lain.", EN="Teleport to other players."}, 140)
@@ -1012,7 +846,7 @@ UnloadBtn.Activated:Connect(function()
     if StatsConnection then StatsConnection:Disconnect() end; if DescendantConnection then DescendantConnection:Disconnect() end
     if SpeedConnection then SpeedConnection:Disconnect() end; if JumpConnection then JumpConnection:Disconnect() end
     for _, conn in pairs(Connections) do if conn and conn.Disconnect then conn:Disconnect() end end
-    SetNoclip(false); SetFly(false); SetPotatoMode(false); SetInfJump(false); SetInstantPrompt(false); SetMaxZoom(false); SetAntiAFK(false); SetESP(false); SetSmartInspector(false); SetFullbright(false); SetNofog(false); SetESPPart(false)
+    SetNoclip(false); SetFly(false); SetPotatoMode(false); SetInfJump(false); SetInstantPrompt(false); SetMaxZoom(false); SetAntiAFK(false); SetESP(false); SetSmartInspector(false); SetFullbright(false); SetNofog(false)
     UIBlur:Destroy(); Gui:Destroy()
 end)
 
