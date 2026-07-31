@@ -5,12 +5,34 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local HttpService = game:GetService("HttpService")
-local VirtualUser = game:GetService("VirtualUser")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local StatsService = game:GetService("Stats")
 local MarketplaceService = game:GetService("MarketplaceService")
 local LocalizationService = game:GetService("LocalizationService")
+
+-- Fallback for VirtualUser (sometimes restricted)
+local VirtualUser
+pcall(function() VirtualUser = game:GetService("VirtualUser") end)
+if not VirtualUser then
+    VirtualUser = { Button2Down = function() end, Button2Up = function() end }
+end
+
+-- Safe Wait & Delay Functions (menggantikan task/wait/delay yang nil)
+local function SafeWait(t)
+    t = t or 0
+    local start = os.clock()
+    while os.clock() - start < t do
+        RunService.Heartbeat:Wait()
+    end
+end
+
+local function SafeDelay(t, func)
+    coroutine.wrap(function()
+        if t > 0 then SafeWait(t) end
+        func()
+    end)()
+end
 
 local LP = Players.LocalPlayer
 local Waypoints = {}
@@ -130,7 +152,7 @@ local function Notify(title, message, duration)
     local TxtMsg = Instance.new("TextLabel", Notif); TxtMsg.Size = UDim2.new(1, -10, 0, 30); TxtMsg.Position = UDim2.new(0, 10, 0, 22); TxtMsg.Text = message; TxtMsg.TextColor3 = Color3.new(1,1,1); TxtMsg.Font = Enum.Font.Gotham; TxtMsg.TextSize = 10; TxtMsg.BackgroundTransparency = 1; TxtMsg.TextXAlignment = Enum.TextXAlignment.Left; TxtMsg.TextWrapped = true
     table.insert(ActiveNotifications, Notif)
     TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(1, -220, 1, -80)}):Play()
-    delay(duration, function()
+    SafeDelay(duration, function()
         local out = TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1, 20, 1, Notif.Position.Y.Offset)})
         out:Play(); out.Completed:Wait()
         for i, v in ipairs(ActiveNotifications) do if v == Notif then table.remove(ActiveNotifications, i) break end end
@@ -213,7 +235,7 @@ local function ToggleUI()
     UI_Open = not UI_Open; if UI_Open then Frame.Visible = true end
     TweenService:Create(Frame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and UDim2.new(0, 360, 0, 260) or UDim2.new(0, 360, 0, 0)}):Play()
     TweenService:Create(UIBlur, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and 20 or 0}):Play()
-    if not UI_Open then delay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
+    if not UI_Open then SafeDelay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
 end
 
 -- Header Buttons
@@ -594,7 +616,7 @@ Connections.Prompt = ProximityPromptService.PromptButtonHoldBegan:Connect(functi
 local AntiAFKBtn = CreateButton(TabUtility, "Anti AFK : OFF", Theme.ButtonOff, 2, {ID="Mencegah auto kick afk.", EN="Prevents idle kick."})
 local function SetAntiAFK(state) ToggleStates.AntiAFK = state; AntiAFKBtn.Text = state and "Anti AFK : ON" or "Anti AFK : OFF"; AntiAFKBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff end
 AntiAFKBtn.Activated:Connect(function() SetAntiAFK(not ToggleStates.AntiAFK) end)
-Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); wait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
+Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); SafeWait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
 
 local KeybindBtn = CreateButton(TabUtility, "Keybind : RightControl", Theme.ButtonDefault, 3, {ID="Ubah tombol GUI.", EN="Change GUI bind."})
 KeybindBtn.Activated:Connect(function() Binding = true; KeybindBtn.Text = "Press any key..."; KeybindBtn.BackgroundColor3 = Color3.fromHex("#E74C3C") end)
@@ -956,5 +978,5 @@ coroutine.wrap(function()
     ToggleUI(); local sound = Instance.new("Sound", workspace); sound.SoundId = "rbxassetid://6042053626"; sound.Volume = 0.5; sound:Play()
     Notify("SYSTEM", "Mamet Utility Pro V7.17.4 Loaded", 5)
     if AntiDetectActive then Notify("SECURITY", "Anti-Cheat Bypass Active", 5) end
-    delay(5, function() sound:Destroy() end)
+    SafeDelay(5, function() sound:Destroy() end)
 end)()
