@@ -7,37 +7,24 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
+local StatsService = game:GetService("Stats")
 local MarketplaceService = game:GetService("MarketplaceService")
 local LocalizationService = game:GetService("LocalizationService")
+local VirtualUser = game:GetService("VirtualUser")
 
--- Safe Services
-local StatsService
-pcall(function() StatsService = game:GetService("Stats") end)
+-- Fallback for missing globals
+local task = task or { wait = wait, spawn = function(f, ...) coroutine.wrap(f)(...) end, delay = delay }
+local GetTime = os.clock or tick
+local GetDate = os.date
 
-local VirtualUser
-pcall(function() VirtualUser = game:GetService("VirtualUser") end)
-if not VirtualUser then
-    VirtualUser = { Button2Down = function() end, Button2Up = function() end }
-end
+-- Safe Parent for UI
+local ParentGui = game:GetService("CoreGui")
+pcall(function() if gethui then ParentGui = gethui() end end)
 
--- Fallbacks for missing globals
-local GetTime = os.clock or tick or function() return 0 end
-local GetDate = os.date or function(f) return "00:00" end
-
--- Safe Wait & Delay Functions
-local function SafeWait(t)
-    t = t or 0
-    local start = GetTime()
-    while GetTime() - start < t do
-        RunService.Heartbeat:Wait()
-    end
-end
-
-local function SafeDelay(t, func)
-    coroutine.wrap(function()
-        if t > 0 then SafeWait(t) end
-        func()
-    end)()
+-- Safe Color3.fromHex Replacement
+local function Hex(hex)
+    hex = hex:gsub("#","")
+    return Color3.fromRGB(tonumber("0x"..hex:sub(1,2)), tonumber("0x"..hex:sub(3,4)), tonumber("0x"..hex:sub(5,6)))
 end
 
 local LP = Players.LocalPlayer
@@ -78,16 +65,9 @@ pcall(function()
     end
 end)
 
--- Bulletproof CoreGui fetching
-local SafeCoreGui
-pcall(function() SafeCoreGui = game:GetService("CoreGui") end)
-if not SafeCoreGui then
-    SafeCoreGui = LP:WaitForChild("PlayerGui")
-end
-
 -- Cleanup Previous Instances
 pcall(function()
-    if SafeCoreGui:FindFirstChild("MametUtility") then SafeCoreGui.MametUtility:Destroy() end
+    if ParentGui:FindFirstChild("MametUtility") then ParentGui.MametUtility:Destroy() end
 end)
 if Lighting:FindFirstChild("MametUIBlur") then Lighting.MametUIBlur:Destroy() end
 
@@ -124,8 +104,8 @@ end)
 -- THEME & LANGUAGE SYSTEM
 ------------------------------------------------
 local Themes = {
-    Light = { Background = Color3.fromHex("#9B5DE5"), BackgroundTop = Color3.fromHex("#7B45B7"), BackgroundTab = Color3.fromHex("#8948D4"), ButtonDefault = Color3.fromHex("#00BBF9"), ButtonOn = Color3.fromHex("#F15BB5"), ButtonOff = Color3.fromHex("#00BBF9"), Text = Color3.fromHex("#FEE440") },
-    Dark = { Background = Color3.fromHex("#18181B"), BackgroundTop = Color3.fromHex("#09090B"), BackgroundTab = Color3.fromHex("#27272A"), ButtonDefault = Color3.fromHex("#3F3F46"), ButtonOn = Color3.fromHex("#3730A3"), ButtonOff = Color3.fromHex("#3F3F46"), Text = Color3.fromHex("#38BDF8") }
+    Light = { Background = Hex("#9B5DE5"), BackgroundTop = Hex("#7B45B7"), BackgroundTab = Hex("#8948D4"), ButtonDefault = Hex("#00BBF9"), ButtonOn = Hex("#F15BB5"), ButtonOff = Hex("#00BBF9"), Text = Hex("#FEE440") },
+    Dark = { Background = Hex("#18181B"), BackgroundTop = Hex("#09090B"), BackgroundTab = Hex("#27272A"), ButtonDefault = Hex("#3F3F46"), ButtonOn = Hex("#3730A3"), ButtonOff = Hex("#3F3F46"), Text = Hex("#38BDF8") }
 }
 
 local Theme = Themes.Dark
@@ -135,7 +115,7 @@ local DynamicLabels = {}
 
 local function RegisterDynamicLang(obj, textID, textEN) table.insert(DynamicLabels, {Obj = obj, ID = textID, EN = textEN}); obj.Text = CurrentLanguage == "ID" and textID or textEN end
 local UIBlur = Instance.new("BlurEffect", Lighting); UIBlur.Name = "MametUIBlur"; UIBlur.Size = 0 
-local Gui = Instance.new("ScreenGui"); Gui.Name = "MametUtility"; Gui.Parent = SafeCoreGui
+local Gui = Instance.new("ScreenGui"); Gui.Name = "MametUtility"; Gui.Parent = ParentGui
 
 local function Humanoid() local c = LP.Character; return c and c:FindFirstChildOfClass("Humanoid") end
 local function HRP() local c = LP.Character; return c and c:FindFirstChild("HumanoidRootPart") end
@@ -168,7 +148,7 @@ local function Notify(title, message, duration)
     local TxtMsg = Instance.new("TextLabel", Notif); TxtMsg.Size = UDim2.new(1, -10, 0, 30); TxtMsg.Position = UDim2.new(0, 10, 0, 22); TxtMsg.Text = message; TxtMsg.TextColor3 = Color3.new(1,1,1); TxtMsg.Font = Enum.Font.Gotham; TxtMsg.TextSize = 10; TxtMsg.BackgroundTransparency = 1; TxtMsg.TextXAlignment = Enum.TextXAlignment.Left; TxtMsg.TextWrapped = true
     table.insert(ActiveNotifications, Notif)
     TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(1, -220, 1, -80)}):Play()
-    SafeDelay(duration, function()
+    task.delay(duration, function()
         local out = TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1, 20, 1, Notif.Position.Y.Offset)})
         out:Play(); out.Completed:Wait()
         for i, v in ipairs(ActiveNotifications) do if v == Notif then table.remove(ActiveNotifications, i) break end end
@@ -213,9 +193,7 @@ StatsConnection = RunService.RenderStepped:Connect(function()
     frames = frames + 1; local now = GetTime()
     if now - startTime >= 1 then 
         fps = frames; frames = 0; startTime = now 
-        if StatsService then
-            pcall(function() lastPingValue = tonumber(StatsService.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 0 end)
-        end
+        pcall(function() lastPingValue = tonumber(StatsService.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 0 end)
         lastPingHex = (lastPingValue >= 250) and "#E74C3C" or ((lastPingValue >= 150) and "#E67E22" or ((lastPingValue >= 80) and "#F1C40F" or "#2ECC71"))
     end
     HeaderText.Text = "MAMET PRO │ " .. GetDate("%H:%M") .. " │ " .. fps .. " FPS │ <font color='" .. lastPingHex .. "'>" .. lastPingValue .. " ms</font>"
@@ -253,7 +231,7 @@ local function ToggleUI()
     UI_Open = not UI_Open; if UI_Open then Frame.Visible = true end
     TweenService:Create(Frame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and UDim2.new(0, 360, 0, 260) or UDim2.new(0, 360, 0, 0)}):Play()
     TweenService:Create(UIBlur, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and 20 or 0}):Play()
-    if not UI_Open then SafeDelay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
+    if not UI_Open then task.delay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
 end
 
 -- Header Buttons
@@ -309,7 +287,7 @@ local function CreateSlider(parent, name, min, max, default, color, layoutOrder,
     local Holder = Instance.new("Frame", parent); Holder.Size = UDim2.new(0, 220, 0, 42); Holder.BackgroundTransparency = 1; Holder.LayoutOrder = layoutOrder
     local Label = Instance.new("TextLabel", Holder); Label.Size = UDim2.new(1, 0, 0, 15); Label.TextColor3 = Theme.Text; Label.TextSize = 11; Label.Text = name .. " : " .. default; Label.Font = Enum.Font.GothamBold; Label.BackgroundTransparency = 1
     local Bar = Instance.new("TextButton", Holder); Bar.Text = ""; Bar.AutoButtonColor = false; Bar.Position = UDim2.new(0, 0, 0, 20); Bar.Size = UDim2.new(1, 0, 0, 12); Bar.BackgroundTransparency = 1
-    local VBar = Instance.new("Frame", Bar); VBar.Size = UDim2.new(1, 0, 0, 4); VBar.Position = UDim2.new(0, 0, 0.5, -2); VBar.BackgroundColor3 = Color3.fromHex("#6237A0"); Corner(VBar, 999)
+    local VBar = Instance.new("Frame", Bar); VBar.Size = UDim2.new(1, 0, 0, 4); VBar.Position = UDim2.new(0, 0, 0.5, -2); VBar.BackgroundColor3 = Hex("#6237A0"); Corner(VBar, 999)
     local Fill = Instance.new("Frame", VBar); Fill.BackgroundColor3 = color; Corner(Fill, 999)
     local Handle = Instance.new("Frame", VBar); Handle.Size = UDim2.new(0, 18, 0, 18); Handle.AnchorPoint = Vector2.new(0.5, 0.5); Handle.Position = UDim2.new(0, 0, 0.5, 0); Handle.BackgroundColor3 = Theme.Text; Corner(Handle, 999)
 
@@ -389,7 +367,7 @@ end
 
 local AvatarFrame = Instance.new("Frame", TabProfile); AvatarFrame.Size = UDim2.new(0, 64, 0, 64); AvatarFrame.BackgroundColor3 = Theme.BackgroundTop; AvatarFrame.LayoutOrder = 1; Corner(AvatarFrame, 32)
 local AvatarImg = Instance.new("ImageLabel", AvatarFrame); AvatarImg.Size = UDim2.new(1, 0, 1, 0); AvatarImg.BackgroundTransparency = 1; Corner(AvatarImg, 32)
-coroutine.wrap(function() local s, img = pcall(function() return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end); if s then AvatarImg.Image = img end end)()
+task.spawn(function() local s, img = pcall(function() return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end); if s then AvatarImg.Image = img end end)
 
 local SecAcc = CreateProfileAccordion("Account Information", 2, 200)
 CreateRow(SecAcc, "Display Name").Text = LP.DisplayName
@@ -397,14 +375,14 @@ CreateRow(SecAcc, "Username").Text = "@" .. LP.Name
 CreateRow(SecAcc, "User ID").Text = tostring(LP.UserId)
 CreateRow(SecAcc, "Account Age").Text = LP.AccountAge .. " Days"
 CreateRow(SecAcc, "Join Date").Text = GetDate("%Y-%m-%d", os.time() - (LP.AccountAge * 86400))
-local ValPremium = CreateRow(SecAcc, "Premium"); ValPremium.Text = LP.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"; ValPremium.TextColor3 = LP.MembershipType == Enum.MembershipType.Premium and Color3.fromHex("#F1C40F") or Color3.new(1, 1, 1)
+local ValPremium = CreateRow(SecAcc, "Premium"); ValPremium.Text = LP.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"; ValPremium.TextColor3 = LP.MembershipType == Enum.MembershipType.Premium and Hex("#F1C40F") or Color3.new(1, 1, 1)
 
 local ValBio, ValFriends, ValActiveFriends = CreateRow(SecAcc, "Bio"), CreateRow(SecAcc, "Friends"), CreateRow(SecAcc, "Active Friends")
 local function GetAPI(url) local req = request or http_request or (syn and syn.request); if req then local s, r = pcall(function() return req({Url = url, Method = "GET"}) end); if s and r and r.Body then local s2, res = pcall(function() return HttpService:JSONDecode(r.Body) end); if s2 then return res end end end; local s, r = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end); return (s and r) and r or nil end
 
-coroutine.wrap(function() local api = GetAPI("https://users.roproxy.com/v1/users/" .. LP.UserId); ValBio.Text = api and (api.description ~= "" and api.description or "No Bio") or "API Blocked" end)()
-coroutine.wrap(function() local api = GetAPI("https://friends.roproxy.com/v1/users/" .. LP.UserId .. "/friends/count"); ValFriends.Text = api and tostring(api.count or 0) or "Error" end)()
-coroutine.wrap(function() local s, online = pcall(function() return LP:GetFriendsOnline(200) end); ValActiveFriends.Text = s and tostring(#online) or "Error" end)()
+task.spawn(function() local api = GetAPI("https://users.roproxy.com/v1/users/" .. LP.UserId); ValBio.Text = api and (api.description ~= "" and api.description or "No Bio") or "API Blocked" end)
+task.spawn(function() local api = GetAPI("https://friends.roproxy.com/v1/users/" .. LP.UserId .. "/friends/count"); ValFriends.Text = api and tostring(api.count or 0) or "Error" end)
+task.spawn(function() local s, online = pcall(function() return LP:GetFriendsOnline(200) end); ValActiveFriends.Text = s and tostring(#online) or "Error" end)
 
 local SecServer = CreateProfileAccordion("Server Information", 3, 150)
 local ValGame = CreateRow(SecServer, "Game Name"); CreateRow(SecServer, "Place ID").Text = tostring(game.PlaceId); CreateRow(SecServer, "Universe ID").Text = tostring(game.GameId)
@@ -412,7 +390,7 @@ CreateRow(SecServer, "Job ID").Text = game.JobId ~= "" and game.JobId or "Privat
 local ValPlayers = CreateRow(SecServer, "Players")
 local function UpdatePlayerCount() ValPlayers.Text = tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers) end
 UpdatePlayerCount(); Players.PlayerAdded:Connect(UpdatePlayerCount); Players.PlayerRemoving:Connect(UpdatePlayerCount)
-coroutine.wrap(function() local s, info = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId) end); ValGame.Text = s and info.Name or "Unknown Game" end)()
+task.spawn(function() local s, info = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId) end); ValGame.Text = s and info.Name or "Unknown Game" end)
 
 local SecExtra = CreateProfileAccordion("Extra Information", 4, 120)
 CreateRow(SecExtra, "Device").Text = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Mobile" or (UIS.GamepadEnabled and "Console" or "PC")
@@ -420,7 +398,7 @@ CreateRow(SecExtra, "Locale").Text = LocalizationService.SystemLocaleId
 local vStr = "Unknown"
 pcall(function() vStr = RunService:GetClientVersion() end)
 CreateRow(SecExtra, "Roblox Version").Text = vStr
-local ValStatus = CreateRow(SecExtra, "Status"); ValStatus.Text = "Connected"; ValStatus.TextColor3 = Color3.fromHex("#2ECC71")
+local ValStatus = CreateRow(SecExtra, "Status"); ValStatus.Text = "Connected"; ValStatus.TextColor3 = Hex("#2ECC71")
 
 -- // 2. MOVEMENT TAB
 local SetSpeedVisual = CreateSlider(TabMovement, "Walk Speed", 16, 120, 16, Theme.Text, 1, function(v) WalkSpeed = v; local h = Humanoid(); if h then h.WalkSpeed = v end end)
@@ -501,7 +479,7 @@ local function SetPotatoMode(state)
             elseif v:IsA("Decal") or v:IsA("Texture") then if not OriginalGraphics[v].Transparency then OriginalGraphics[v].Transparency = v.Transparency end; v.Transparency = 1
             elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then if not OriginalGraphics[v].Lifetime then OriginalGraphics[v].Lifetime = v.Lifetime end; v.Lifetime = NumberRange.new(0) end
         end
-        coroutine.wrap(function() local des = workspace:GetDescendants(); for i = 1, #des do ApplyPotato(des[i]); if i % 500 == 0 then RunService.Heartbeat:Wait() end end end)()
+        task.spawn(function() local des = workspace:GetDescendants(); for i = 1, #des do ApplyPotato(des[i]); if i % 500 == 0 then RunService.Heartbeat:Wait() end end end)
         if not DescendantConnection then DescendantConnection = workspace.DescendantAdded:Connect(function(v) if ToggleStates.PotatoMode then ApplyPotato(v) end end) end
     else
         FPSBtn.Text = "FPS Booster : OFF"; FPSBtn.BackgroundColor3 = Theme.ButtonOff; Notify("SYSTEM", "Restoring graphics...", 3)
@@ -527,7 +505,7 @@ local function CreateESP(player)
     RemoveESP(player)
 
     local highlight = Instance.new("Highlight")
-    highlight.FillColor = Color3.fromHex("#E74C3C")
+    highlight.FillColor = Hex("#E74C3C")
     highlight.OutlineColor = Color3.new(1, 1, 1)
     highlight.FillTransparency = 0.6
     highlight.OutlineTransparency = 0.1
@@ -636,10 +614,10 @@ Connections.Prompt = ProximityPromptService.PromptButtonHoldBegan:Connect(functi
 local AntiAFKBtn = CreateButton(TabUtility, "Anti AFK : OFF", Theme.ButtonOff, 2, {ID="Mencegah auto kick afk.", EN="Prevents idle kick."})
 local function SetAntiAFK(state) ToggleStates.AntiAFK = state; AntiAFKBtn.Text = state and "Anti AFK : ON" or "Anti AFK : OFF"; AntiAFKBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff end
 AntiAFKBtn.Activated:Connect(function() SetAntiAFK(not ToggleStates.AntiAFK) end)
-Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); SafeWait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
+Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); task.wait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
 
 local KeybindBtn = CreateButton(TabUtility, "Keybind : RightControl", Theme.ButtonDefault, 3, {ID="Ubah tombol GUI.", EN="Change GUI bind."})
-KeybindBtn.Activated:Connect(function() Binding = true; KeybindBtn.Text = "Press any key..."; KeybindBtn.BackgroundColor3 = Color3.fromHex("#E74C3C") end)
+KeybindBtn.Activated:Connect(function() Binding = true; KeybindBtn.Text = "Press any key..."; KeybindBtn.BackgroundColor3 = Hex("#E74C3C") end)
 Connections.Input = UIS.InputBegan:Connect(function(input, gpe)
     if Binding and input.UserInputType == Enum.UserInputType.Keyboard then CurrentKeybind = input.KeyCode; Binding = false; KeybindBtn.Text = "Keybind : " .. input.KeyCode.Name; KeybindBtn.BackgroundColor3 = Theme.ButtonDefault; Notify("SYSTEM", "Keybind changed", 3)
     elseif not gpe and input.KeyCode == CurrentKeybind then ToggleUI() end
@@ -688,7 +666,7 @@ local function HighlightSmart(hitPart)
     CurrentSelectionBox = Instance.new("SelectionBox")
     CurrentSelectionBox.Adornee = mainTarget
     CurrentSelectionBox.LineThickness = 0.05
-    CurrentSelectionBox.Color3 = Color3.fromHex("#10B981")
+    CurrentSelectionBox.Color3 = Hex("#10B981")
     CurrentSelectionBox.Parent = Gui
     
     CurrentBillboard = Instance.new("BillboardGui")
@@ -700,9 +678,9 @@ local function HighlightSmart(hitPart)
     
     local TextLabel = Instance.new("TextLabel")
     TextLabel.Size = UDim2.new(1, 0, 1, 0)
-    TextLabel.BackgroundColor3 = Color3.fromHex("#09090B")
+    TextLabel.BackgroundColor3 = Hex("#09090B")
     TextLabel.BackgroundTransparency = 0.2
-    TextLabel.TextColor3 = Color3.fromHex("#10B981")
+    TextLabel.TextColor3 = Hex("#10B981")
     TextLabel.TextScaled = true
     TextLabel.Text = mainTarget.Name .. "\n(" .. tostring(math.floor(targetSize.X)) .. ", " .. tostring(math.floor(targetSize.Y)) .. ", " .. tostring(math.floor(targetSize.Z)) .. ")"
     TextLabel.Font = Enum.Font.GothamBold
@@ -718,7 +696,7 @@ local function HandlePartESPClick(target)
         end
         if not hasESP then
             local hl = Instance.new("Highlight")
-            hl.FillColor = Color3.fromHex("#F15BB5")
+            hl.FillColor = Hex("#F15BB5")
             hl.OutlineColor = Color3.new(1, 1, 1)
             hl.FillTransparency = 0.5
             hl.Parent = target
@@ -867,7 +845,7 @@ local function CreateDynamicWP(id, cfToSave)
     local NameLbl = Instance.new("TextLabel", Item); NameLbl.Size = UDim2.new(0, 70, 1, 0); NameLbl.Position = UDim2.new(0, 10, 0, 0); NameLbl.BackgroundTransparency = 1; NameLbl.Text = "WP " .. id; NameLbl.TextColor3 = Theme.Text; NameLbl.Font = Enum.Font.GothamBold; NameLbl.TextXAlignment = Enum.TextXAlignment.Left
     
     local TpBtn = Instance.new("TextButton", Item); TpBtn.Size = UDim2.new(0, 35, 0, 22); TpBtn.Position = UDim2.new(1, -110, 0.5, -11); TpBtn.Text = "Go"; TpBtn.BackgroundColor3 = Theme.ButtonDefault; TpBtn.TextColor3 = Theme.Text; TpBtn.Font = Enum.Font.GothamBold; Corner(TpBtn, 6)
-    local EditBtn = Instance.new("TextButton", Item); EditBtn.Size = UDim2.new(0, 35, 0, 22); EditBtn.Position = UDim2.new(1, -70, 0.5, -11); EditBtn.Text = "Set"; EditBtn.BackgroundColor3 = Color3.fromHex("#F39C12"); EditBtn.TextColor3 = Color3.new(1, 1, 1); EditBtn.Font = Enum.Font.GothamBold; Corner(EditBtn, 6)
+    local EditBtn = Instance.new("TextButton", Item); EditBtn.Size = UDim2.new(0, 35, 0, 22); EditBtn.Position = UDim2.new(1, -70, 0.5, -11); EditBtn.Text = "Set"; EditBtn.BackgroundColor3 = Hex("#F39C12"); EditBtn.TextColor3 = Color3.new(1, 1, 1); EditBtn.Font = Enum.Font.GothamBold; Corner(EditBtn, 6)
     local DelBtn = Instance.new("TextButton", Item); DelBtn.Size = UDim2.new(0, 25, 0, 22); DelBtn.Position = UDim2.new(1, -30, 0.5, -11); DelBtn.Text = "X"; DelBtn.Font = Enum.Font.GothamBold; DelBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50); DelBtn.TextColor3 = Color3.new(1,1,1); Corner(DelBtn, 6)
     
     TpBtn.Activated:Connect(function() local h = HRP(); if h and Waypoints[id] then h.CFrame = Waypoints[id] end end)
@@ -891,10 +869,10 @@ local function GetNextWPId()
 end
 AddWPBtn.Activated:Connect(function() local h = HRP(); if h then CreateDynamicWP(GetNextWPId(), h.CFrame) end end)
 
-local _, _, HopScroll = CreateAccordion(TabTeleport, "Server Hop", Color3.fromHex("#6D28D9"), 3, {ID="Pindah ke server publik lain.", EN="Hop to another server."}, 100)
+local _, _, HopScroll = CreateAccordion(TabTeleport, "Server Hop", Hex("#6D28D9"), 3, {ID="Pindah ke server publik lain.", EN="Hop to another server."}, 100)
 local function PerformServerHop(isCrowded)
     Notify("SERVER", CurrentLanguage == "ID" and "Nyari server..." or "Searching server...", 4)
-    coroutine.wrap(function()
+    task.spawn(function()
         local Api = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=" .. (isCrowded and "Desc" or "Asc") .. "&limit=100"
         local s, res = pcall(function() return HttpService:JSONDecode(game:HttpGet(Api)) end)
         if s and res and res.data then
@@ -905,15 +883,15 @@ local function PerformServerHop(isCrowded)
             end
             Notify("SERVER", "No server found, try again.", 3)
         else Notify("ERROR", "Failed to fetch servers.", 3) end
-    end)()
+    end)
 end
 
 local HopBtnContainer = Instance.new("Frame", HopScroll); HopBtnContainer.Size = UDim2.new(1, -6, 0, 28); HopBtnContainer.BackgroundTransparency = 1; HopBtnContainer.LayoutOrder = 1
-local HopEmptyBtn = CreateButton(HopBtnContainer, "Hop (Sepi)", Color3.fromHex("#1D4ED8"), 1); HopEmptyBtn.Size = UDim2.new(0.5, -2, 1, 0); HopEmptyBtn.TextColor3 = Color3.new(1, 1, 1); HopEmptyBtn.Activated:Connect(function() PerformServerHop(false) end); RegisterDynamicLang(HopEmptyBtn, "Hop (Sepi)", "Hop (Empty)")
-local HopCrowdedBtn = CreateButton(HopBtnContainer, "Hop (Rame)", Color3.fromHex("#BE185D"), 2); HopCrowdedBtn.Size = UDim2.new(0.5, -2, 1, 0); HopCrowdedBtn.AnchorPoint = Vector2.new(1, 0); HopCrowdedBtn.Position = UDim2.new(1, 0, 0, 0); HopCrowdedBtn.TextColor3 = Color3.new(1, 1, 1); HopCrowdedBtn.Activated:Connect(function() PerformServerHop(true) end); RegisterDynamicLang(HopCrowdedBtn, "Hop (Rame)", "Hop (Crowded)")
+local HopEmptyBtn = CreateButton(HopBtnContainer, "Hop (Sepi)", Hex("#1D4ED8"), 1); HopEmptyBtn.Size = UDim2.new(0.5, -2, 1, 0); HopEmptyBtn.TextColor3 = Color3.new(1, 1, 1); HopEmptyBtn.Activated:Connect(function() PerformServerHop(false) end); RegisterDynamicLang(HopEmptyBtn, "Hop (Sepi)", "Hop (Empty)")
+local HopCrowdedBtn = CreateButton(HopBtnContainer, "Hop (Rame)", Hex("#BE185D"), 2); HopCrowdedBtn.Size = UDim2.new(0.5, -2, 1, 0); HopCrowdedBtn.AnchorPoint = Vector2.new(1, 0); HopCrowdedBtn.Position = UDim2.new(1, 0, 0, 0); HopCrowdedBtn.TextColor3 = Color3.new(1, 1, 1); HopCrowdedBtn.Activated:Connect(function() PerformServerHop(true) end); RegisterDynamicLang(HopCrowdedBtn, "Hop (Rame)", "Hop (Crowded)")
 HopScroll.CanvasSize = UDim2.new(0, 0, 0, 30)
 
-local RejoinBtn = CreateButton(TabTeleport, "Rejoin", Color3.fromHex("#E74C3C"), 4, {ID="Masuk ulang server sama.", EN="Rejoin same server."}); RejoinBtn.TextColor3 = Color3.new(1, 1, 1)
+local RejoinBtn = CreateButton(TabTeleport, "Rejoin", Hex("#E74C3C"), 4, {ID="Masuk ulang server sama.", EN="Rejoin same server."}); RejoinBtn.TextColor3 = Color3.new(1, 1, 1)
 RejoinBtn.Activated:Connect(function() 
     Notify("SERVER", "Rejoining...", 3)
     if game.JobId == "" then TeleportService:Teleport(game.PlaceId, LP) else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end
@@ -921,8 +899,8 @@ end)
 
 -- // 6. CONFIG TAB
 local ConfigInput = Instance.new("TextBox", TabConfig); ConfigInput.Size = UDim2.new(0, 220, 0, 28); ConfigInput.BackgroundColor3 = Theme.BackgroundTop; ConfigInput.TextColor3 = Theme.Text; ConfigInput.Font = Enum.Font.GothamBold; ConfigInput.TextSize = 11; ConfigInput.PlaceholderText = "(nama config)"; ConfigInput.Text = ""; ConfigInput.LayoutOrder = 1; Corner(ConfigInput, 8)
-local SaveBtn = CreateButton(TabConfig, "Save Config", Color3.fromHex("#0F766E"), 2, {ID="Simpan setingan.", EN="Save settings."}); SaveBtn.TextColor3 = Color3.new(1, 1, 1)
-local _, _, LoadScroll, LoadListUI, _, ToggleLoadBtn, LoadState = CreateAccordion(TabConfig, "Load Config", Color3.fromHex("#4338CA"), 3, {ID="Muat setingan.", EN="Load settings."}, 120)
+local SaveBtn = CreateButton(TabConfig, "Save Config", Hex("#0F766E"), 2, {ID="Simpan setingan.", EN="Save settings."}); SaveBtn.TextColor3 = Color3.new(1, 1, 1)
+local _, _, LoadScroll, LoadListUI, _, ToggleLoadBtn, LoadState = CreateAccordion(TabConfig, "Load Config", Hex("#4338CA"), 3, {ID="Muat setingan.", EN="Load settings."}, 120)
 
 local function GetConfigPath(name) return ConfigFolder .. "/" .. string.gsub(name=="" and "ConfigUtama" or name, "[^%w_]", "") .. ".json" end
 
@@ -981,7 +959,7 @@ SaveBtn.Activated:Connect(function()
     else Notify("ERROR", "Executor tidak support WriteFile!", 3) end
 end)
 
-local UnloadBtn = CreateButton(TabConfig, "Unload Script", Color3.fromHex("#C0392B"), 4, {ID="Hapus script dari layar.", EN="Remove script."}); UnloadBtn.TextColor3 = Color3.new(1, 1, 1)
+local UnloadBtn = CreateButton(TabConfig, "Unload Script", Hex("#C0392B"), 4, {ID="Hapus script dari layar.", EN="Remove script."}); UnloadBtn.TextColor3 = Color3.new(1, 1, 1)
 UnloadBtn.Activated:Connect(function()
     if StatsConnection then StatsConnection:Disconnect() end; if DescendantConnection then DescendantConnection:Disconnect() end
     if SpeedConnection then SpeedConnection:Disconnect() end; if JumpConnection then JumpConnection:Disconnect() end
@@ -994,9 +972,9 @@ end)
 
 for _, data in ipairs(DynamicLabels) do if data.Obj then data.Obj.Text = CurrentLanguage == "ID" and data.ID or data.EN end end
 
-coroutine.wrap(function()
+task.spawn(function()
     ToggleUI(); local sound = Instance.new("Sound", workspace); sound.SoundId = "rbxassetid://6042053626"; sound.Volume = 0.5; sound:Play()
     Notify("SYSTEM", "Mamet Utility Pro V7.17.4 Loaded", 5)
     if AntiDetectActive then Notify("SECURITY", "Anti-Cheat Bypass Active", 5) end
-    SafeDelay(5, function() sound:Destroy() end)
-end)()
+    task.delay(5, function() sound:Destroy() end)
+end)
