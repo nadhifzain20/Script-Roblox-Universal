@@ -38,7 +38,7 @@ local Binding = false
 local ToggleStates = {
     InfJump = false, Noclip = false, Fly = false,
     InstantPrompt = false, MaxZoom = false, AntiAFK = false, PotatoMode = false, ESP = false,
-    SmartInspector = false, Fullbright = false, Nofog = false
+    SmartInspector = false, Fullbright = false, Nofog = false, PartESP = false, GotoPart = false
 }
 
 -- Config Folder Setup
@@ -604,15 +604,23 @@ Connections.Input = UIS.InputBegan:Connect(function(input, gpe)
 end)
 
 -- ==========================================
--- SMART PART INSPECTOR INTEGRATION
+-- SMART INSPECTOR & PART TOOLS INTEGRATION
 -- ==========================================
-local SmartInspectorBtn = CreateButton(TabUtility, "Smart Inspector : OFF", Theme.ButtonOff, 4, {ID="Inspeksi ukuran & model part pintar.", EN="Smart inspect parts & models size."})
+local ToolMouseConn, ToolTouchConn
 local CurrentSelectionBox = nil
 local CurrentBillboard = nil
+local PartESPHighlights = {}
 
 local function ClearInspector()
     if CurrentSelectionBox then CurrentSelectionBox:Destroy(); CurrentSelectionBox = nil end
     if CurrentBillboard then CurrentBillboard:Destroy(); CurrentBillboard = nil end
+end
+
+local function ClearPartESP()
+    for _, hl in pairs(PartESPHighlights) do
+        if hl then hl:Destroy() end
+    end
+    PartESPHighlights = {}
 end
 
 local function GetSmartTarget(hitPart)
@@ -660,41 +668,128 @@ local function HighlightSmart(hitPart)
     Corner(TextLabel, 6)
 end
 
-local function SmartRaycast(position)
-    local cam = workspace.CurrentCamera
-    local ray = cam:ViewportPointToRay(position.X, position.Y)
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {LP.Character, Gui}
-    
-    local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
-    if result and result.Instance then HighlightSmart(result.Instance) else ClearInspector() end
+local function HandlePartESPClick(target)
+    if target and (not LP.Character or not target:IsDescendantOf(LP.Character)) then
+        local hasESP = false
+        for _, hl in pairs(PartESPHighlights) do
+            if hl.Adornee == target then hasESP = true; break end
+        end
+        if not hasESP then
+            local hl = Instance.new("Highlight")
+            hl.FillColor = Color3.fromHex("#F15BB5")
+            hl.OutlineColor = Color3.new(1, 1, 1)
+            hl.FillTransparency = 0.5
+            hl.Parent = target
+            table.insert(PartESPHighlights, hl)
+        end
+    end
 end
 
-local function SetSmartInspector(state)
+local function HandleGotoPartClick(target)
+    if target and (not LP.Character or not target:IsDescendantOf(LP.Character)) then
+        local h = HRP()
+        if h then
+            h.CFrame = target.CFrame * CFrame.new(0, 3, 0)
+            Notify("TELEPORT", "Teleported to " .. target.Name, 3)
+        end
+    end
+end
+
+local function SetupToolConnections()
+    if ToolMouseConn then ToolMouseConn:Disconnect(); ToolMouseConn = nil end
+    if ToolTouchConn then ToolTouchConn:Disconnect(); ToolTouchConn = nil end
+    
+    if ToggleStates.SmartInspector or ToggleStates.PartESP or ToggleStates.GotoPart then
+        ToolTouchConn = UIS.TouchTapInWorld:Connect(function(position, processedByUI)
+            if not processedByUI then
+                local cam = workspace.CurrentCamera
+                local ray = cam:ViewportPointToRay(position.X, position.Y)
+                local params = RaycastParams.new()
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                params.FilterDescendantsInstances = {LP.Character, Gui}
+                
+                local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+                if result and result.Instance then
+                    if ToggleStates.SmartInspector then HighlightSmart(result.Instance)
+                    elseif ToggleStates.PartESP then HandlePartESPClick(result.Instance)
+                    elseif ToggleStates.GotoPart then HandleGotoPartClick(result.Instance) end
+                else
+                    if ToggleStates.SmartInspector then ClearInspector() end
+                end
+            end
+        end)
+        
+        ToolMouseConn = UIS.InputBegan:Connect(function(input, gpe)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 and not gpe then
+                if not UIS:GetFocusedTextBox() then
+                    local mouseLoc = UIS:GetMouseLocation()
+                    local cam = workspace.CurrentCamera
+                    local ray = cam:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
+                    local params = RaycastParams.new()
+                    params.FilterType = Enum.RaycastFilterType.Exclude
+                    params.FilterDescendantsInstances = {LP.Character, Gui}
+                    
+                    local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+                    if result and result.Instance then
+                        if ToggleStates.SmartInspector then HighlightSmart(result.Instance)
+                        elseif ToggleStates.PartESP then HandlePartESPClick(result.Instance)
+                        elseif ToggleStates.GotoPart then HandleGotoPartClick(result.Instance) end
+                    else
+                        if ToggleStates.SmartInspector then ClearInspector() end
+                    end
+                end
+            end
+        end)
+    end
+end
+
+local _, _, SmartScroll, SmartListUI, UpdateSmartSize, SmartToggleBtn, SmartState = CreateAccordion(TabUtility, "Smart Inspector Menu", Theme.ButtonDefault, 4, {ID="Menu inspeksi & teleport pintar.", EN="Smart inspect & teleport menu."}, 140)
+
+local SmartInspectorBtn = CreateButton(SmartScroll, "Smart Inspector : OFF", Theme.ButtonOff, 1, {ID="Inspeksi ukuran & model part pintar.", EN="Smart inspect parts & models size."})
+SmartInspectorBtn.Size = UDim2.new(1, -6, 0, 28)
+
+local PartESPBtn = CreateButton(SmartScroll, "ESP Part : OFF", Theme.ButtonOff, 2, {ID="Klik part untuk memberikan ESP permanen.", EN="Click a part to give it permanent ESP."})
+PartESPBtn.Size = UDim2.new(1, -6, 0, 28)
+
+local GotoPartBtn = CreateButton(SmartScroll, "Goto Part : OFF", Theme.ButtonOff, 3, {ID="Klik part untuk teleport ke posisinya.", EN="Click a part to teleport to its position."})
+GotoPartBtn.Size = UDim2.new(1, -6, 0, 28)
+
+SmartListUI:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
+    SmartScroll.CanvasSize = UDim2.new(0, 0, 0, SmartListUI.AbsoluteContentSize.Y) 
+    if SmartState.IsOpen then UpdateSmartSize() end 
+end)
+
+local SetSmartInspector, SetPartESP, SetGotoPart
+
+SetSmartInspector = function(state)
+    if state then SetPartESP(false); SetGotoPart(false) end
     ToggleStates.SmartInspector = state
     SmartInspectorBtn.Text = state and "Smart Inspector : ON" or "Smart Inspector : OFF"
     SmartInspectorBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
-    
-    if state then
-        Connections.SmartInspectorTouch = UIS.TouchTapInWorld:Connect(function(position, processedByUI)
-            if not processedByUI then SmartRaycast(position) end
-        end)
-        
-        local Mouse = LP:GetMouse()
-        Connections.SmartInspectorMouse = Mouse.Button1Down:Connect(function()
-            if not UIS:GetFocusedTextBox() then
-                local target = Mouse.Target
-                if target and (not LP.Character or not target:IsDescendantOf(LP.Character)) then HighlightSmart(target) else ClearInspector() end
-            end
-        end)
-    else
-        if Connections.SmartInspectorTouch then Connections.SmartInspectorTouch:Disconnect(); Connections.SmartInspectorTouch = nil end
-        if Connections.SmartInspectorMouse then Connections.SmartInspectorMouse:Disconnect(); Connections.SmartInspectorMouse = nil end
-        ClearInspector()
-    end
+    SetupToolConnections()
 end
+
+SetPartESP = function(state)
+    if state then SetSmartInspector(false); SetGotoPart(false) end
+    ToggleStates.PartESP = state
+    PartESPBtn.Text = state and "ESP Part : ON" or "ESP Part : OFF"
+    PartESPBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
+    if not state then ClearPartESP() end
+    SetupToolConnections()
+end
+
+SetGotoPart = function(state)
+    if state then SetSmartInspector(false); SetPartESP(false) end
+    ToggleStates.GotoPart = state
+    GotoPartBtn.Text = state and "Goto Part : ON" or "Goto Part : OFF"
+    GotoPartBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
+    SetupToolConnections()
+end
+
 SmartInspectorBtn.Activated:Connect(function() SetSmartInspector(not ToggleStates.SmartInspector) end)
+PartESPBtn.Activated:Connect(function() SetPartESP(not ToggleStates.PartESP) end)
+GotoPartBtn.Activated:Connect(function() SetGotoPart(not ToggleStates.GotoPart) end)
+
 
 -- // 5. TELEPORT TAB
 local _, _, PlayerScroll, PlayerListUI, _, TogglePlayerBtn, PlayerState = CreateAccordion(TabTeleport, "Teleport to Player", Theme.ButtonDefault, 1, {ID="Teleport ke pemain lain.", EN="Teleport to other players."}, 140)
@@ -801,6 +896,9 @@ local function LoadConfigData(path)
             if res.ESP ~= ToggleStates.ESP then SetESP(res.ESP) end
             if res.Fullbright ~= ToggleStates.Fullbright then SetFullbright(res.Fullbright) end
             if res.Nofog ~= ToggleStates.Nofog then SetNofog(res.Nofog) end
+            if res.SmartInspector ~= ToggleStates.SmartInspector then SetSmartInspector(res.SmartInspector) end
+            if res.PartESP ~= ToggleStates.PartESP then SetPartESP(res.PartESP) end
+            if res.GotoPart ~= ToggleStates.GotoPart then SetGotoPart(res.GotoPart) end
             if res.Waypoints then for id, cData in pairs(res.Waypoints) do CreateDynamicWP(tonumber(id) or id, CFrame.new(unpack(cData))) end end
             Notify("CONFIG", "Loaded from " .. path, 3)
         else Notify("ERROR", "Data config corrupt!", 3) end
@@ -834,7 +932,7 @@ end
 ToggleLoadBtn.Activated:Connect(function() if LoadState.IsOpen then RefreshConfigList() end end)
 SaveBtn.Activated:Connect(function()
     if writefile then
-        local data = { WalkSpeed = WalkSpeed, JumpPower = JumpPower, FOV = CurrentFOV, FlySpeed = FlySpeed, Keybind = CurrentKeybind.Name, InfJump = ToggleStates.InfJump, Noclip = ToggleStates.Noclip, InstantPrompt = ToggleStates.InstantPrompt, MaxZoom = ToggleStates.MaxZoom, AntiAFK = ToggleStates.AntiAFK, PotatoMode = ToggleStates.PotatoMode, ESP = ToggleStates.ESP, Fullbright = ToggleStates.Fullbright, Nofog = ToggleStates.Nofog, Waypoints = {} }
+        local data = { WalkSpeed = WalkSpeed, JumpPower = JumpPower, FOV = CurrentFOV, FlySpeed = FlySpeed, Keybind = CurrentKeybind.Name, InfJump = ToggleStates.InfJump, Noclip = ToggleStates.Noclip, InstantPrompt = ToggleStates.InstantPrompt, MaxZoom = ToggleStates.MaxZoom, AntiAFK = ToggleStates.AntiAFK, PotatoMode = ToggleStates.PotatoMode, ESP = ToggleStates.ESP, Fullbright = ToggleStates.Fullbright, Nofog = ToggleStates.Nofog, SmartInspector = ToggleStates.SmartInspector, PartESP = ToggleStates.PartESP, GotoPart = ToggleStates.GotoPart, Waypoints = {} }
         for id, cf in pairs(Waypoints) do data.Waypoints[tostring(id)] = {cf:GetComponents()} end
         local s = pcall(function() writefile(GetConfigPath(ConfigInput.Text), HttpService:JSONEncode(data)) end)
         if s then Notify("CONFIG", "Saved to " .. GetConfigPath(ConfigInput.Text), 3); if LoadState.IsOpen then RefreshConfigList() end else Notify("ERROR", "Gagal menyimpan config!", 3) end
@@ -845,8 +943,10 @@ local UnloadBtn = CreateButton(TabConfig, "Unload Script", Color3.fromHex("#C039
 UnloadBtn.Activated:Connect(function()
     if StatsConnection then StatsConnection:Disconnect() end; if DescendantConnection then DescendantConnection:Disconnect() end
     if SpeedConnection then SpeedConnection:Disconnect() end; if JumpConnection then JumpConnection:Disconnect() end
+    if ToolMouseConn then ToolMouseConn:Disconnect() end; if ToolTouchConn then ToolTouchConn:Disconnect() end
     for _, conn in pairs(Connections) do if conn and conn.Disconnect then conn:Disconnect() end end
-    SetNoclip(false); SetFly(false); SetPotatoMode(false); SetInfJump(false); SetInstantPrompt(false); SetMaxZoom(false); SetAntiAFK(false); SetESP(false); SetSmartInspector(false); SetFullbright(false); SetNofog(false)
+    ClearInspector(); ClearPartESP()
+    SetNoclip(false); SetFly(false); SetPotatoMode(false); SetInfJump(false); SetInstantPrompt(false); SetMaxZoom(false); SetAntiAFK(false); SetESP(false); SetSmartInspector(false); SetPartESP(false); SetGotoPart(false); SetFullbright(false); SetNofog(false)
     UIBlur:Destroy(); Gui:Destroy()
 end)
 
