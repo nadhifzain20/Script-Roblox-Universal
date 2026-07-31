@@ -24,8 +24,9 @@ local DescendantConnection
 local SpeedConnection
 local JumpConnection
 
--- Saving original lighting states for Fullbright & Nofog
-local OriginalFB = {Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime, GlobalShadows = Lighting.GlobalShadows, ExposureCompensation = Lighting.ExposureCompensation}
+-- Saving original lighting states safely
+local OriginalFB = {Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime, GlobalShadows = Lighting.GlobalShadows}
+pcall(function() OriginalFB.ExposureCompensation = Lighting.ExposureCompensation end)
 local OriginalFog = {FogEnd = Lighting.FogEnd, FogStart = Lighting.FogStart}
 
 local WalkSpeed = 16
@@ -37,12 +38,16 @@ local Binding = false
 local ToggleStates = {
     InfJump = false, Noclip = false, Fly = false,
     InstantPrompt = false, MaxZoom = false, AntiAFK = false, PotatoMode = false, ESP = false,
-    SmartInspector = false, Fullbright = false, Nofog = false -- Ditambahkan untuk Fitur Baru
+    SmartInspector = false, Fullbright = false, Nofog = false
 }
 
 -- Config Folder Setup
 local ConfigFolder = "MametConfigs"
-if isfolder and not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
+pcall(function()
+    if makefolder and (not isfolder or not isfolder(ConfigFolder)) then 
+        makefolder(ConfigFolder) 
+    end
+end)
 
 -- Cleanup Previous Instances
 if game.CoreGui:FindFirstChild("MametUtility") then game.CoreGui.MametUtility:Destroy() end
@@ -52,7 +57,7 @@ if Lighting:FindFirstChild("MametUIBlur") then Lighting.MametUIBlur:Destroy() en
 -- ANTI-DETECTION SYSTEM
 ------------------------------------------------
 local AntiDetectActive = false
-local success = pcall(function()
+pcall(function()
     local MirrorMT = getrawmetatable(game)
     local OldIndex = MirrorMT.__index
     local OldNewIndex = MirrorMT.__newindex
@@ -125,7 +130,7 @@ local function Notify(title, message, duration)
     local TxtMsg = Instance.new("TextLabel", Notif); TxtMsg.Size = UDim2.new(1, -10, 0, 30); TxtMsg.Position = UDim2.new(0, 10, 0, 22); TxtMsg.Text = message; TxtMsg.TextColor3 = Color3.new(1,1,1); TxtMsg.Font = Enum.Font.Gotham; TxtMsg.TextSize = 10; TxtMsg.BackgroundTransparency = 1; TxtMsg.TextXAlignment = Enum.TextXAlignment.Left; TxtMsg.TextWrapped = true
     table.insert(ActiveNotifications, Notif)
     TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(1, -220, 1, -80)}):Play()
-    task.delay(duration, function()
+    delay(duration, function()
         local out = TweenService:Create(Notif, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1, 20, 1, Notif.Position.Y.Offset)})
         out:Play(); out.Completed:Wait()
         for i, v in ipairs(ActiveNotifications) do if v == Notif then table.remove(ActiveNotifications, i) break end end
@@ -208,7 +213,7 @@ local function ToggleUI()
     UI_Open = not UI_Open; if UI_Open then Frame.Visible = true end
     TweenService:Create(Frame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and UDim2.new(0, 360, 0, 260) or UDim2.new(0, 360, 0, 0)}):Play()
     TweenService:Create(UIBlur, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UI_Open and 20 or 0}):Play()
-    if not UI_Open then task.delay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
+    if not UI_Open then delay(0.4, function() if not UI_Open then Frame.Visible = false end end) end
 end
 
 -- Header Buttons
@@ -344,7 +349,7 @@ end
 
 local AvatarFrame = Instance.new("Frame", TabProfile); AvatarFrame.Size = UDim2.new(0, 64, 0, 64); AvatarFrame.BackgroundColor3 = Theme.BackgroundTop; AvatarFrame.LayoutOrder = 1; Corner(AvatarFrame, 32)
 local AvatarImg = Instance.new("ImageLabel", AvatarFrame); AvatarImg.Size = UDim2.new(1, 0, 1, 0); AvatarImg.BackgroundTransparency = 1; Corner(AvatarImg, 32)
-task.spawn(function() local s, img = pcall(function() return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end); if s then AvatarImg.Image = img end end)
+coroutine.wrap(function() local s, img = pcall(function() return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end); if s then AvatarImg.Image = img end end)()
 
 local SecAcc = CreateProfileAccordion("Account Information", 2, 200)
 CreateRow(SecAcc, "Display Name").Text = LP.DisplayName
@@ -357,9 +362,9 @@ local ValPremium = CreateRow(SecAcc, "Premium"); ValPremium.Text = LP.Membership
 local ValBio, ValFriends, ValActiveFriends = CreateRow(SecAcc, "Bio"), CreateRow(SecAcc, "Friends"), CreateRow(SecAcc, "Active Friends")
 local function GetAPI(url) local req = request or http_request or (syn and syn.request); if req then local s, r = pcall(function() return req({Url = url, Method = "GET"}) end); if s and r and r.Body then local s2, res = pcall(function() return HttpService:JSONDecode(r.Body) end); if s2 then return res end end end; local s, r = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end); return (s and r) and r or nil end
 
-task.spawn(function() local api = GetAPI("https://users.roproxy.com/v1/users/" .. LP.UserId); ValBio.Text = api and (api.description ~= "" and api.description or "No Bio") or "API Blocked" end)
-task.spawn(function() local api = GetAPI("https://friends.roproxy.com/v1/users/" .. LP.UserId .. "/friends/count"); ValFriends.Text = api and tostring(api.count or 0) or "Error" end)
-task.spawn(function() local s, online = pcall(function() return LP:GetFriendsOnline(200) end); ValActiveFriends.Text = s and tostring(#online) or "Error" end)
+coroutine.wrap(function() local api = GetAPI("https://users.roproxy.com/v1/users/" .. LP.UserId); ValBio.Text = api and (api.description ~= "" and api.description or "No Bio") or "API Blocked" end)()
+coroutine.wrap(function() local api = GetAPI("https://friends.roproxy.com/v1/users/" .. LP.UserId .. "/friends/count"); ValFriends.Text = api and tostring(api.count or 0) or "Error" end)()
+coroutine.wrap(function() local s, online = pcall(function() return LP:GetFriendsOnline(200) end); ValActiveFriends.Text = s and tostring(#online) or "Error" end)()
 
 local SecServer = CreateProfileAccordion("Server Information", 3, 150)
 local ValGame = CreateRow(SecServer, "Game Name"); CreateRow(SecServer, "Place ID").Text = tostring(game.PlaceId); CreateRow(SecServer, "Universe ID").Text = tostring(game.GameId)
@@ -367,7 +372,7 @@ CreateRow(SecServer, "Job ID").Text = game.JobId ~= "" and game.JobId or "Privat
 local ValPlayers = CreateRow(SecServer, "Players")
 local function UpdatePlayerCount() ValPlayers.Text = tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers) end
 UpdatePlayerCount(); Players.PlayerAdded:Connect(UpdatePlayerCount); Players.PlayerRemoving:Connect(UpdatePlayerCount)
-task.spawn(function() local s, info = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId) end); ValGame.Text = s and info.Name or "Unknown Game" end)
+coroutine.wrap(function() local s, info = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId) end); ValGame.Text = s and info.Name or "Unknown Game" end)()
 
 local SecExtra = CreateProfileAccordion("Extra Information", 4, 120)
 CreateRow(SecExtra, "Device").Text = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Mobile" or (UIS.GamepadEnabled and "Console" or "PC")
@@ -454,7 +459,7 @@ local function SetPotatoMode(state)
             elseif v:IsA("Decal") or v:IsA("Texture") then if not OriginalGraphics[v].Transparency then OriginalGraphics[v].Transparency = v.Transparency end; v.Transparency = 1
             elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then if not OriginalGraphics[v].Lifetime then OriginalGraphics[v].Lifetime = v.Lifetime end; v.Lifetime = NumberRange.new(0) end
         end
-        task.spawn(function() local des = workspace:GetDescendants(); for i = 1, #des do ApplyPotato(des[i]); if i % 500 == 0 then RunService.Heartbeat:Wait() end end end)
+        coroutine.wrap(function() local des = workspace:GetDescendants(); for i = 1, #des do ApplyPotato(des[i]); if i % 500 == 0 then RunService.Heartbeat:Wait() end end end)()
         if not DescendantConnection then DescendantConnection = workspace.DescendantAdded:Connect(function(v) if ToggleStates.PotatoMode then ApplyPotato(v) end end) end
     else
         FPSBtn.Text = "FPS Booster : OFF"; FPSBtn.BackgroundColor3 = Theme.ButtonOff; Notify("SYSTEM", "Restoring graphics...", 3)
@@ -553,12 +558,12 @@ local function SetFullbright(state)
         Lighting.Brightness = 3
         Lighting.ClockTime = 14
         Lighting.GlobalShadows = false
-        Lighting.ExposureCompensation = 0.75
+        pcall(function() Lighting.ExposureCompensation = 0.75 end)
     else
         Lighting.Brightness = OriginalFB.Brightness
         Lighting.ClockTime = OriginalFB.ClockTime
         Lighting.GlobalShadows = OriginalFB.GlobalShadows
-        Lighting.ExposureCompensation = OriginalFB.ExposureCompensation
+        pcall(function() Lighting.ExposureCompensation = OriginalFB.ExposureCompensation end)
     end
 end
 FullbrightBtn.Activated:Connect(function() SetFullbright(not ToggleStates.Fullbright) end)
@@ -571,10 +576,10 @@ local function SetNofog(state)
     NofogBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff
     if state then
         Lighting.FogEnd = 9e9
-        Lighting.FogStart = 9e9
+        pcall(function() Lighting.FogStart = 9e9 end)
     else
         Lighting.FogEnd = OriginalFog.FogEnd
-        Lighting.FogStart = OriginalFog.FogStart
+        pcall(function() Lighting.FogStart = OriginalFog.FogStart end)
     end
 end
 NofogBtn.Activated:Connect(function() SetNofog(not ToggleStates.Nofog) end)
@@ -589,7 +594,7 @@ Connections.Prompt = ProximityPromptService.PromptButtonHoldBegan:Connect(functi
 local AntiAFKBtn = CreateButton(TabUtility, "Anti AFK : OFF", Theme.ButtonOff, 2, {ID="Mencegah auto kick afk.", EN="Prevents idle kick."})
 local function SetAntiAFK(state) ToggleStates.AntiAFK = state; AntiAFKBtn.Text = state and "Anti AFK : ON" or "Anti AFK : OFF"; AntiAFKBtn.BackgroundColor3 = state and Theme.ButtonOn or Theme.ButtonOff end
 AntiAFKBtn.Activated:Connect(function() SetAntiAFK(not ToggleStates.AntiAFK) end)
-Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); task.wait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
+Connections.Idled = LP.Idled:Connect(function() if ToggleStates.AntiAFK then local cam = workspace.CurrentCamera; VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame); wait(1); VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame) end end)
 
 local KeybindBtn = CreateButton(TabUtility, "Keybind : RightControl", Theme.ButtonDefault, 3, {ID="Ubah tombol GUI.", EN="Change GUI bind."})
 KeybindBtn.Activated:Connect(function() Binding = true; KeybindBtn.Text = "Press any key..."; KeybindBtn.BackgroundColor3 = Color3.fromHex("#E74C3C") end)
@@ -752,7 +757,7 @@ AddWPBtn.Activated:Connect(function() local h = HRP(); if h then CreateDynamicWP
 local _, _, HopScroll = CreateAccordion(TabTeleport, "Server Hop", Color3.fromHex("#6D28D9"), 3, {ID="Pindah ke server publik lain.", EN="Hop to another server."}, 100)
 local function PerformServerHop(isCrowded)
     Notify("SERVER", CurrentLanguage == "ID" and "Nyari server..." or "Searching server...", 4)
-    task.spawn(function()
+    coroutine.wrap(function()
         local Api = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=" .. (isCrowded and "Desc" or "Asc") .. "&limit=100"
         local s, res = pcall(function() return HttpService:JSONDecode(game:HttpGet(Api)) end)
         if s and res and res.data then
@@ -763,7 +768,7 @@ local function PerformServerHop(isCrowded)
             end
             Notify("SERVER", "No server found, try again.", 3)
         else Notify("ERROR", "Failed to fetch servers.", 3) end
-    end)
+    end)()
 end
 
 local HopBtnContainer = Instance.new("Frame", HopScroll); HopBtnContainer.Size = UDim2.new(1, -6, 0, 28); HopBtnContainer.BackgroundTransparency = 1; HopBtnContainer.LayoutOrder = 1
@@ -847,9 +852,9 @@ end)
 
 for _, data in ipairs(DynamicLabels) do if data.Obj then data.Obj.Text = CurrentLanguage == "ID" and data.ID or data.EN end end
 
-task.spawn(function()
+coroutine.wrap(function()
     ToggleUI(); local sound = Instance.new("Sound", workspace); sound.SoundId = "rbxassetid://6042053626"; sound.Volume = 0.5; sound:Play()
     Notify("SYSTEM", "Mamet Utility Pro V7.17.4 Loaded", 5)
     if AntiDetectActive then Notify("SECURITY", "Anti-Cheat Bypass Active", 5) end
-    task.delay(5, function() sound:Destroy() end)
-end)
+    delay(5, function() sound:Destroy() end)
+end)()
