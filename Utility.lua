@@ -1,4 +1,4 @@
---// MAMET UTILITY PRO (TABBED EDITION - V7.17.4 - SUPER OPTIMIZED + SMART ESP + SMART INSPECTOR)
+--// MAMET UTILITY 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
